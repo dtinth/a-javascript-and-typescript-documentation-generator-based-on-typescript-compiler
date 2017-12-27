@@ -2,9 +2,9 @@
 # yarn lockfile v1
 
 
-"@std/esm@^0.18.0":
-  version "0.18.0"
-  resolved "https://registry.yarnpkg.com/@std/esm/-/esm-0.18.0.tgz#e212b565c765f93b29ec522a493a192ce7ae2ba6"
+"@types/node@^8.5.2":
+  version "8.5.2"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-8.5.2.tgz#83b8103fa9a2c2e83d78f701a9aa7c9539739aa5"
 
 "@types/strip-bom@^3.0.0":
   version "3.0.0"

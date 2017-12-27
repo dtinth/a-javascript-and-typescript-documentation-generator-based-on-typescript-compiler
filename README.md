@@ -21,6 +21,19 @@ I haven’t found one yet, so I am creating one, using the minimal amount of cod
 
 - Module exports symbols.
 
-- Each symbol contains a type.
+- A symbol is declared at some node.
+
+- The symbol, together with the node that declared it, allows TypeScript compiler to infer the type.
 
 - A type may refer to other symbols. e.g. `(a: A) => B` refers to types A and B.
+
+
+## Development
+
+To run the experiment,
+
+```
+./node_modules/.bin/ts-node ./experiment.ts
+```
+
+It tries to generate some stuff based on `test/fixture/index.js`.
