@@ -10,21 +10,40 @@ const rootFileNames = [
 //   basePath + '/loader/index.js'
 // ]
 
+// const basePath = '/Users/dtinth/GitHub/redux'
+// const rootFileNames = [
+//   basePath + '/src/index.js' // '/index.d.ts'
+// ]
+
 interface DocumentationData {
-  exportedModules: string[]
+  publicModules: string[]
   symbols: { [id: string]: DocumentationSymbol }
 }
 
-interface DocumentationSymbolBase {
-  name: string
-  symbolFlags: number
+interface DocumentationComment {
   jsdoc: any
   comment: any
 }
 
-interface DocumentationTypedSymbol extends DocumentationSymbolBase {
+interface DocumentationSymbolBase extends DocumentationComment {
+  name: string
+  symbolFlags: number
+  declaration?: DocumentationDeclaration
+}
+
+interface DocumentationDeclaration {
+  module: string
+  line: number
+  character: number
+}
+
+interface DocumentationType {
   typeString: string
   typeFlags: number
+  typeInfo: TypeInfo
+}
+
+interface DocumentationTypedSymbol extends DocumentationSymbolBase, DocumentationType {
 }
 
 interface DocumentationModule extends DocumentationSymbolBase {
@@ -49,9 +68,25 @@ interface DocumentationClassSymbol extends DocumentationTypedSymbol {
   bases: string[]
 }
 
-interface DocumentationSignature {
+interface DocumentationSignature extends DocumentationComment {
   parameters: DocumentationSymbolBase[]
   returnType: string
+}
+
+interface OtherTypeInfo {
+  kind: 'other'
+  text: string
+}
+
+interface SymbolReferenceTypeInfo {
+  kind: 'symbol'
+  symbol: string
+}
+
+interface TypeReferenceTypeInfo {
+  kind: 'lol no generics'
+  target: TypeInfo
+  typeArguments: TypeInfo
 }
 
 type DocumentationSymbol =
@@ -59,6 +94,11 @@ type DocumentationSymbol =
   DocumentationValueSymbol |
   DocumentationFunctionSymbol |
   DocumentationClassSymbol
+
+type TypeInfo =
+  OtherTypeInfo |
+  SymbolReferenceTypeInfo |
+  TypeReferenceTypeInfo
 
 const { options } = ts.convertCompilerOptionsFromJson({
   allowJs: true
@@ -70,7 +110,7 @@ const idMap = new Map()
 
 function createWalker () {
   const state: DocumentationData = {
-    exportedModules: [ ],
+    publicModules: [ ],
     symbols: { }
   }
 
@@ -97,7 +137,7 @@ function createWalker () {
   }
 
   function readModule (moduleSymbol: ts.Symbol) {
-    state.exportedModules.push(walkExportedSymbol(moduleSymbol))
+    state.publicModules.push(walkExportedSymbol(moduleSymbol))
   }
 
   function walkExportedSymbol (symbol: ts.Symbol, declaration?: ts.Node) {
@@ -106,10 +146,8 @@ function createWalker () {
         return generateModuleSymbol()
       }
 
-      declaration = declaration || symbol.valueDeclaration
-      const type = declaration
-        ? checker.getTypeOfSymbolAtLocation(symbol, declaration)
-        : checker.getDeclaredTypeOfSymbol(symbol)
+      declaration = symbol.valueDeclaration || declaration
+      const type = getType(symbol, declaration)
       const callSignatures = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
       const constructSignatures = checker.getSignaturesOfType(type, ts.SignatureKind.Construct)
 
@@ -117,7 +155,11 @@ function createWalker () {
       const base: DocumentationTypedSymbol = {
         ...symbolBase(symbol),
         typeString,
-        typeFlags: type.getFlags()
+        typeFlags: type.getFlags(),
+        typeInfo: getTypeInfo(type)
+      }
+      if (declaration) {
+        base.declaration = getDeclarationPosition(declaration)
       }
       if (constructSignatures.length) {
         return generateClassSymbol()
@@ -177,15 +219,35 @@ function createWalker () {
     })
   }
 
+  function getDeclarationPosition (declaration: ts.Node): DocumentationDeclaration | undefined {
+    const sourceFile = declaration.getSourceFile()
+    const symbol = (sourceFile as any).symbol as ts.Symbol | undefined
+    if (!symbol) return null
+    const startPosition = declaration.getStart()
+    const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
+    return {
+      module: walkExportedSymbol(symbol),
+      line: start.line,
+      character: start.character
+    }
+  }
+
   function resolveSymbol (symbol: ts.Symbol): ts.Symbol {
     return (symbol.flags & ts.SymbolFlags.Alias)
       ? checker.getAliasedSymbol(symbol)
       : symbol
   }
 
-  function generateSignature (signature): DocumentationSignature {
+  function generateSignature (signature: ts.Signature): DocumentationSignature {
     return {
-      parameters: signature.getParameters().map(parameter => symbolBase(parameter)),
+      jsdoc: signature.getJsDocTags(),
+      comment: signature.getDocumentationComment(),
+      parameters: signature.getParameters().map(parameter => {
+        return {
+          ...symbolBase(parameter),
+          typeString: typeToString(getType(parameter))
+        }
+      }),
       returnType: typeToString(signature.getReturnType())
     }
   }
@@ -194,13 +256,47 @@ function createWalker () {
     return checker.typeToString(type, declaration, ts.TypeFormatFlags.NoTruncation)
   }
 
+  // Please help me type this function.
+  function getTypeInfo (type: ts.Type, allowGenerics = true): TypeInfo {
+    const objectFlags: number = (type as any).objectFlags || 0
+    if ((objectFlags & ts.ObjectFlags.Reference) && allowGenerics) {
+      const target = (type as any).target as ts.GenericType
+      const typeArguments = (type as any).typeArguments || [ ]
+      if (typeArguments.length) {
+        return {
+          kind: 'lol no generics',
+          target: getTypeInfo(target, false),
+          typeArguments: typeArguments.map(arg => getTypeInfo(arg))
+        }
+      }
+    }
+    if (type.symbol && type.symbol.valueDeclaration) {
+      if (objectFlags & ts.ObjectFlags.ClassOrInterface) {
+        return {
+          kind: 'symbol',
+          symbol: walkExportedSymbol(type.symbol)
+        }
+      }
+    }
+    return {
+      kind: 'other',
+      text: typeToString(type)
+    }
+  }
+
+  function getType (symbol: ts.Symbol, declaration?: ts.Node): ts.Type {
+    declaration = symbol.valueDeclaration || declaration
+    return declaration
+      ? checker.getTypeOfSymbolAtLocation(symbol, declaration)
+      : checker.getDeclaredTypeOfSymbol(symbol)
+  }
+
   return { readModule, getState: () => state }
 }
 
 const walker = createWalker()
 
 for (const filename of program.getRootFileNames()) {
-  console.log(filename)
   const file = program.getSourceFile(filename)
   const moduleSymbol = (file as any).symbol
   if (!moduleSymbol) continue
@@ -208,28 +304,6 @@ for (const filename of program.getRootFileNames()) {
 }
 
 console.log(JSON.stringify(walker.getState(), null, 2))
-//   for (const exportedSymbol of checker.getExportsOfModule(moduleSymbol)) {
-//     const resolvedSymbol = (exportedSymbol.flags & ts.SymbolFlags.Alias)
-//       ? checker.getAliasedSymbol(exportedSymbol)
-//       : exportedSymbol
-//     console.log(' *', exportedSymbol.escapedName)
-//
-//     const node = exportedSymbol.declarations[0]
-//     const type = checker.getTypeOfSymbolAtLocation(resolvedSymbol, resolvedSymbol.valueDeclaration || node)
-//     const typeString = checker.typeToString(type, node, ts.TypeFormatFlags.NoTruncation)
-//     const comment = resolvedSymbol.getDocumentationComment()
-//
-//     console.log('    |-', checker.getFullyQualifiedName(exportedSymbol), exportedSymbol.id)
-//     if (resolvedSymbol !== exportedSymbol) {
-//       console.log('    |-', checker.getFullyQualifiedName(resolvedSymbol), resolvedSymbol.id)
-//     }
-//     for (const item of comment) {
-//       console.log(require('indent-string')(item.text, 12))
-//     }
-//     console.log('    +->', typeString)
-//     if (typeString === 'typeof NotechartLoader') global['z'] = type
-//   }
-// }
 
 // For further testing in REPL...
 Object.assign(global, {

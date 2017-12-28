@@ -54,6 +54,10 @@ class Actor {
   }
 }
 
+/**
+ * Creates an Actor
+ * @return A new Actor
+ */
 export default function createActor () {
   return new Actor()
 }
