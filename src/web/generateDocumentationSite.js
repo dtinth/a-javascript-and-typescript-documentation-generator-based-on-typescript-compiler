@@ -89,6 +89,12 @@ export function renderPage (page) {
   </div>
 }
 
+const BASE = '#D3D0C7'
+const SHADOW_1 = '#848284'
+const SHADOW_2 = '#424142'
+const HIGHLIGHT_1 = '#D3D0C7'
+const HIGHLIGHT_2 = '#FFF'
+
 const Main = styled.div`
   margin-left: 256px;
 `
@@ -99,7 +105,7 @@ const Sidebar = styled.div`
   top: 0;
   bottom: 0;
   width: 256px;
-  background: #ccc;
+  background: #000;
 `
 
 const Container = styled.div`
@@ -111,30 +117,72 @@ const Heading = styled.h1`
 `
 
 const Item = ({ title, children }) => (
-  <ItemBox>
-    <ItemTitle>{title}</ItemTitle>
-    {children}
-  </ItemBox>
+  <ItemContainer>
+    <Window>
+      <WindowTitle>{title}</WindowTitle>
+      {children}
+    </Window>
+  </ItemContainer>
 )
 
-const ItemBox = styled.section`
-  border: 1px solid #bbb;
-  margin: 2em 0 0;
-  overflow: hidden;
-  border-radius: 4px;
+const Window = ({ children }) => (
+  <Bordered a={HIGHLIGHT_1} b={SHADOW_2}>
+    <Bordered a={HIGHLIGHT_2} b={SHADOW_1}>
+      <WindowContent>
+        {children}
+      </WindowContent>
+    </Bordered>
+  </Bordered>
+)
+
+const ItemContainer = styled.div`
+  margin: 0 0 2em;
 `
-const ItemTitle = styled.h2`
+
+const WindowContent = styled.div`
+  padding: 2px;
+  background: ${BASE};
+`
+
+const WindowTitle = styled.h2`
   font-size: 1.2em;
   padding: 8px;
   margin: 0;
-  background: #bbb;
-  text-shadow: 0 1px 0 #eee;
+  background: linear-gradient(to right, #09246B, #A4CBF6);
+  text-shadow: 1px 1px 0 #000;
+  color: white;
 `
-const ItemInfo = styled.div`
+const ItemInfo = ({ children }) => (
+  <ItemInfoContainer>
+    <Bordered a={SHADOW_1} b={HIGHLIGHT_1}>
+      <Bordered a={SHADOW_2} b={HIGHLIGHT_2}>
+        <ItemInfoContent>
+          {children}
+        </ItemInfoContent>
+      </Bordered>
+    </Bordered>
+  </ItemInfoContainer>
+)
+const ItemInfoContainer = styled.div`
+  margin-top: 2px;
+`
+const ItemInfoContent = styled.div`
   padding: 8px;
+  background: #fff;
 `
-const ItemType = styled.pre`
-  background: #eee;
+const ItemType = ({ children }) => (
+  <ItemTypeContainer>
+    <Bordered a={SHADOW_1} b={HIGHLIGHT_2}>
+      <Bordered a={HIGHLIGHT_2} b={SHADOW_1}>
+        <ItemTypeContent>{children}</ItemTypeContent>
+      </Bordered>
+    </Bordered>
+  </ItemTypeContainer>
+)
+const ItemTypeContainer = styled.div`
+  margin-top: 2px;
+`
+const ItemTypeContent = styled.pre`
   font-size: 14px;
   margin: 0;
   padding: 8px;
@@ -144,3 +192,9 @@ const ItemType = styled.pre`
 `
 const TocList = styled.ul``
 const TocListItem = styled.li``
+
+const Bordered = styled.div`
+  border: 1px solid ${props => props.b};
+  border-top-color: ${props => props.a};
+  border-left-color: ${props => props.a};
+`
