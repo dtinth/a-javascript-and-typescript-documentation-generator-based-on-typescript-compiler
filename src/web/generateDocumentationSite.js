@@ -6,7 +6,7 @@ import styled from 'styled-components'
  */
 
 /**
- * @typedef {{ content: any }} RenderedPage
+ * @typedef {{ content: any, sidebar: any }} RenderedPage
  */
 
 /**
@@ -26,6 +26,7 @@ export default function generateDocumentationSite (data) {
       render () {
         const exported = moduleNode.exportedSymbols
         return {
+          sidebar: renderSidebar(),
           content: (
             <div>
               <Heading>Module ‘{moduleNode.name}’</Heading>
@@ -49,6 +50,18 @@ export default function generateDocumentationSite (data) {
         }
       }
     }
+  }
+
+  function renderSidebar () {
+    return (
+      <nav>
+        <SidebarNavHeader>Module list</SidebarNavHeader>
+        {data.publicModules.map(id => {
+          const moduleNode = data.symbols[id]
+          return <SidebarItem>{moduleNode.name}</SidebarItem>
+        })}
+      </nav>
+    )
   }
 
   function renderSymbolDocumentation (id) {
@@ -80,12 +93,14 @@ export default function generateDocumentationSite (data) {
 export function renderPage (page) {
   const renderResult = page.render()
   return <div>
+    <Sidebar>
+      {renderResult.sidebar}
+    </Sidebar>
     <Main>
       <Container>
         {renderResult.content}
       </Container>
     </Main>
-    <Sidebar></Sidebar>
   </div>
 }
 
@@ -106,6 +121,19 @@ const Sidebar = styled.div`
   bottom: 0;
   width: 256px;
   background: #000;
+  color: #fff;
+  font-family: Comic Sans MS, sans-serif;
+`
+const SidebarItem = styled.span`
+  display: block;
+  padding: 3px 8px;
+`
+const SidebarNavHeader = styled.p`
+  text-align: center;
+  color: #888;
+  font-weight: bold;
+  margin: 0;
+  padding: 8px;
 `
 
 const Container = styled.div`
