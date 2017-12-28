@@ -1,10 +1,16 @@
 {
   "dependencies": {
+    "enable-hot-reload": "^1.0.0-3",
     "indent-string": "^3.2.0",
+    "minimist": "^1.2.0",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "styled-components": "^2.4.0",
     "typescript": "^2.6.2"
   },
   "devDependencies": {
     "@types/node": "^8.5.2",
+    "nwb": "^0.20.0",
     "ts-node": "^4.1.0"
   }
 }

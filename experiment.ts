@@ -1,3 +1,4 @@
+import * as path from 'path'
 import * as ts from 'typescript'
 
 const basePath = process.cwd() + '/test/fixture'
@@ -118,12 +119,29 @@ function createWalker () {
   const idMap = new Map<ts.Symbol, string>()
 
   function symbolBase (symbol: ts.Symbol): DocumentationSymbolBase {
+    const name = (symbol.flags & ts.SymbolFlags.Module)
+      ? rewriteModuleName(symbol.getName())
+      : symbol.getName()
     return {
-      name: symbol.getName(),
+      name: name,
       jsdoc: symbol.getJsDocTags(),
       comment: symbol.getDocumentationComment(),
       symbolFlags: symbol.getFlags()
     }
+  }
+
+  function rewriteModuleName (name): string {
+    name = name.replace(/"/g, '')
+    name = path.relative(basePath, name).replace(/\\/g, '/')
+    const parts = name.split('/')
+    const index = parts.lastIndexOf('node_modules')
+    if (index > -1) {
+      parts.splice(0, index + 1)
+    } else {
+      parts.splice(0, 0, '.')
+    }
+    name = parts.join('/')
+    return name
   }
 
   function visitSymbol (symbol: ts.Symbol, visitor: (symbol: ts.Symbol) => DocumentationSymbol): string {
