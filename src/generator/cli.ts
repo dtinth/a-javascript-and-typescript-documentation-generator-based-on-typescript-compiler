@@ -1,6 +1,7 @@
 import * as doc from './doc'
 import * as fs from 'fs'
 import * as minimist from 'minimist'
+import * as path from 'path'
 import * as ts from 'typescript'
 
 import createWalker from './createWalker'
@@ -12,7 +13,8 @@ const rootFileNames = (args._.length > 0
   : [ require.resolve('./test/fixtures/index.ts') ]
 ).map(n => fs.realpathSync(n))
 
-const basePath = require('commondir')(rootFileNames)
+const basePath = require('commondir')(rootFileNames.map(f => path.dirname(f)))
+const moduleName = args.moduleName || '.'
 
 const { options } = ts.convertCompilerOptionsFromJson({
   allowJs: true
@@ -20,7 +22,7 @@ const { options } = ts.convertCompilerOptionsFromJson({
 
 const program = ts.createProgram(rootFileNames, options)
 const checker = program.getTypeChecker()
-const walker = createWalker(program, basePath)
+const walker = createWalker(program, basePath, moduleName)
 
 for (const filename of program.getRootFileNames()) {
   const file = program.getSourceFile(filename)

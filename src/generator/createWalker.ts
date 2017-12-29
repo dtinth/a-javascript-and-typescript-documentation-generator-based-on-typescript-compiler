@@ -2,7 +2,7 @@ import * as doc from './doc'
 import * as path from 'path'
 import * as ts from 'typescript'
 
-export default function createWalker (program: ts.Program, basePath: string) {
+export default function createWalker (program: ts.Program, basePath: string, moduleName: string) {
   const checker = program.getTypeChecker()
 
   const state: doc.DocumentationData = {
@@ -27,15 +27,23 @@ export default function createWalker (program: ts.Program, basePath: string) {
 
   function rewriteModuleName (name): string {
     name = name.replace(/"/g, '').replace(/\\/g, '/')
-    if (!name.match(/^\/|:\//)) return name
-    name = path.relative(basePath, name).replace(/\\/g, '/')
-    const parts = name.split('/')
-    const index = parts.lastIndexOf('node_modules')
-    if (index > -1) {
-      parts.splice(0, index + 1)
-    } else {
-      parts.splice(0, 0, '.')
+
+    // Absolute path (non-ambient module)
+    let absolute = false
+    if (name.match(/^\/|:\//)) {
+      name = path.relative(basePath, name).replace(/\\/g, '/')
+      absolute = true
     }
+    const parts = name.split('/')
+    if (absolute) {
+      const index = parts.lastIndexOf('node_modules')
+      if (index > -1) {
+        parts.splice(0, index + 1)
+      } else {
+        parts.splice(0, 0, moduleName)
+      }
+    }
+    if (parts[parts.length - 1] === 'index') parts.pop()
     name = parts.join('/')
     return name
   }
