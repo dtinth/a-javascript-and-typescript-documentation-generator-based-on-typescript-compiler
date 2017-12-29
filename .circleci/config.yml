@@ -16,11 +16,14 @@ jobs:
           paths:
             - ./node_modules
       - run:
+          name: build
+          command: yarn build
+      - run:
           name: generate html
-          command: yarn dev:generate test/fixture/index.ts --html /tmp/result
+          command: yarn generate test/fixture/index.ts --html /tmp/result
       - run:
           name: generate json
-          command: yarn dev:generate test/fixture/index.ts --json /tmp/result/documentation.json
+          command: yarn generate test/fixture/index.ts --json /tmp/result/documentation.json
       - store_artifacts:
           path: /tmp/result
           prefix: result
