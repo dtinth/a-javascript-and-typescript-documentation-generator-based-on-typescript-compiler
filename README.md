@@ -93,7 +93,11 @@ This thing is still in development.
 3.  To generate a documentation JSON:
 
     ```
-    ./node_modules/.bin/ts-node src/generator/cli.ts test/fixture/index.ts
-    #                            |                    |
-    #                           CLI                  Input file
+    yarn dev:generate <inputfile.ts ...>
+    ```
+
+4.  To view and develop the documentation web page:
+
+    ```
+    ./node_modules/.bin/ts-node --doc.input=<inputfile.ts>
     ```

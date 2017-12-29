@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "dev:generate": "ts-node src/generator/cli.ts",
+    "dev:web": "nwb serve-react-app src/web/dev/index.js"
+  },
   "dependencies": {
     "@types/minimist": "^1.2.0",
     "commondir": "^1.0.1",
