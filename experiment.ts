@@ -131,7 +131,8 @@ function createWalker () {
   }
 
   function rewriteModuleName (name): string {
-    name = name.replace(/"/g, '')
+    name = name.replace(/"/g, '').replace(/\\/g, '/')
+    if (!name.match(/^\/|:\//)) return name
     name = path.relative(basePath, name).replace(/\\/g, '/')
     const parts = name.split('/')
     const index = parts.lastIndexOf('node_modules')
