@@ -1,16 +1,19 @@
 # a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler
-:construction: A documentation generator for JavaScript/TypeScript projects, based on TypeScript compiler, lol.
 
+**A documentation generator that understands ES modules and infers types.**
+It is powered by the TypeScript compiler, which also powers the [JavaScript and TypeScript IntelliSense](https://github.com/Microsoft/TypeScript/wiki/JavaScript-Language-Service-in-Visual-Studio#TypeInference).
+
+This means your documented code will be picked up by IDEs
+(such as Visual Studio, VS Code, or Atom-IDE) to provide auto-completions the same way!
+
+:construction: :construction: :construction:
 **This is under construction!**
-
-I am looking for a documentation generator tool that works for me.
-I haven’t found one yet, so I am creating one, using the minimal amount of code possible.
-
+:construction: :construction: :construction:
 
 
 ## Inspiration
 
-  - Visual Studio Code’s JavaScript IntelliSense (based on TypeScript) is very smart.
+  - Visual Studio’s JavaScript IntelliSense (based on TypeScript) is very smart.
     It is based on TypeScript’s Language Service.
     However, most current documentation tools don’t benefit from that smart-ness.
 
