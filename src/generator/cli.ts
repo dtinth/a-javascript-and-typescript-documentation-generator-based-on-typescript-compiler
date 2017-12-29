@@ -1,9 +1,9 @@
-import * as doc from './src/generator/doc'
+import * as doc from './doc'
 import * as fs from 'fs'
 import * as minimist from 'minimist'
 import * as ts from 'typescript'
 
-import createWalker from './src/generator/createWalker'
+import createWalker from './createWalker'
 
 const args = minimist(process.argv.slice(2))
 
