@@ -1,121 +1,17 @@
+import * as doc from './src/generator/doc'
+import * as fs from 'fs'
+import * as minimist from 'minimist'
 import * as path from 'path'
 import * as ts from 'typescript'
 
-const basePath = process.cwd() + '/test/fixture'
-const rootFileNames = [
-  process.cwd() + '/test/fixture/index.ts'
-]
+const args = minimist(process.argv.slice(2))
 
-// const basePath = '/Users/dtinth/Bemuse/bemuse-notechart/src'
-// const rootFileNames = [
-//   basePath + '/loader/index.js'
-// ]
+const rootFileNames = (args._.length > 0
+  ? args._
+  : [ require.resolve('./test/fixtures/index.ts') ]
+).map(n => fs.realpathSync(n))
 
-// const basePath = '/Users/dtinth/GitHub/redux'
-// const rootFileNames = [
-//   basePath + '/src/index.js' // '/index.d.ts'
-// ]
-
-// const basePath = '/Users/dtinth/Downloads/mobx-master'
-// const rootFileNames = [
-//   basePath + '/src/mobx.ts' // '/index.d.ts'
-// ]
-
-// const basePath = '/Users/dtinth/GitHub/recompose/src/packages'
-// const rootFileNames = [
-//   basePath + '/recompose/index.js',
-//   basePath + '/recompose-relay/index.js'
-// ]
-
-// const basePath = '/tmp'
-// const rootFileNames = [
-//   basePath + '/immutable.d.ts'
-// ]
-
-interface DocumentationData {
-  publicModules: string[]
-  symbols: { [id: string]: DocumentationSymbol }
-}
-
-interface DocumentationComment {
-  jsdoc: any
-  comment: any
-}
-
-interface DocumentationSymbolBase extends DocumentationComment {
-  name: string
-  symbolFlags: number
-  declaration?: DocumentationDeclaration
-}
-
-interface DocumentationDeclaration {
-  module: string
-  line: number
-  character: number
-}
-
-interface DocumentationType {
-  typeString: string
-  typeFlags: number
-  typeInfo: TypeInfo
-}
-
-interface DocumentationTypedSymbol extends DocumentationSymbolBase, DocumentationType {
-}
-
-interface DocumentationModule extends DocumentationSymbolBase {
-  kind: 'module'
-  exportedSymbols: { [name: string]: string }
-}
-
-interface DocumentationValueSymbol extends DocumentationTypedSymbol {
-  kind: 'value'
-}
-
-interface DocumentationFunctionSymbol extends DocumentationTypedSymbol {
-  kind: 'function'
-  callSignatures: DocumentationSignature[]
-}
-
-interface DocumentationClassSymbol extends DocumentationTypedSymbol {
-  kind: 'class'
-  constructSignatures: DocumentationSignature[]
-  instanceMembers: { [name: string]: string }
-  classMembers: { [name: string]: string }
-  bases: string[]
-}
-
-interface DocumentationSignature extends DocumentationComment {
-  parameters: DocumentationSymbolBase[]
-  returnType: string
-}
-
-interface OtherTypeInfo {
-  kind: 'other'
-  text: string
-}
-
-interface SymbolReferenceTypeInfo {
-  kind: 'symbol'
-  symbol: string
-}
-
-interface TypeReferenceTypeInfo {
-  kind: 'lol no generics'
-  target: TypeInfo
-  typeArguments: TypeInfo
-}
-
-type DocumentationSymbol =
-  DocumentationModule |
-  DocumentationValueSymbol |
-  DocumentationFunctionSymbol |
-  DocumentationClassSymbol
-
-type TypeInfo =
-  OtherTypeInfo |
-  SymbolReferenceTypeInfo |
-  TypeReferenceTypeInfo
+const basePath = require('commondir')(rootFileNames)
 
 const { options } = ts.convertCompilerOptionsFromJson({
   allowJs: true
@@ -126,7 +22,7 @@ const checker = program.getTypeChecker()
 const idMap = new Map()
 
 function createWalker () {
-  const state: DocumentationData = {
+  const state: doc.DocumentationData = {
     publicModules: [ ],
     symbols: { }
   }
@@ -134,7 +30,7 @@ function createWalker () {
   let nextId = 1
   const idMap = new Map<ts.Symbol, string>()
 
-  function symbolBase (symbol: ts.Symbol): DocumentationSymbolBase {
+  function symbolBase (symbol: ts.Symbol): doc.DocumentationSymbolBase {
     const name = (symbol.flags & ts.SymbolFlags.Module)
       ? rewriteModuleName(symbol.getName())
       : symbol.getName()
@@ -161,7 +57,7 @@ function createWalker () {
     return name
   }
 
-  function visitSymbol (symbol: ts.Symbol, visitor: (symbol: ts.Symbol) => DocumentationSymbol): string {
+  function visitSymbol (symbol: ts.Symbol, visitor: (symbol: ts.Symbol) => doc.DocumentationSymbol): string {
     if (idMap.has(symbol)) {
       return idMap.get(symbol)
     }
@@ -188,7 +84,7 @@ function createWalker () {
 
       const typeString = typeToString(type, declaration || undefined)
       const objectFlags: number = (type as any).objectFlags || 0
-      const base: DocumentationTypedSymbol = {
+      const base: doc.DocumentationTypedSymbol = {
         ...symbolBase(symbol),
         typeString,
         typeFlags: type.getFlags(),
@@ -205,8 +101,8 @@ function createWalker () {
       }
       return generateValueSymbol()
 
-      function generateModuleSymbol (): DocumentationModule {
-        const out: DocumentationModule = {
+      function generateModuleSymbol (): doc.DocumentationModule {
+        const out: doc.DocumentationModule = {
           ...symbolBase(symbol),
           kind: 'module',
           exportedSymbols: { }
@@ -218,7 +114,7 @@ function createWalker () {
         }
         return out
       }
-      function generateClassSymbol (): DocumentationClassSymbol {
+      function generateClassSymbol (): doc.DocumentationClassSymbol {
         const exports: Map<string, ts.Symbol> = (symbol as any).exports
         const members: Map<string, ts.Symbol> = (symbol as any).members
         const mapMembers = (map: Map<string, ts.Symbol>) => {
@@ -239,14 +135,14 @@ function createWalker () {
             .filter(id => id)
         }
       }
-      function generateFunctionSymbol (): DocumentationFunctionSymbol {
+      function generateFunctionSymbol (): doc.DocumentationFunctionSymbol {
         return {
           ...base,
           kind: 'function',
           callSignatures: callSignatures.map(signature => generateSignature(signature))
         }
       }
-      function generateValueSymbol (): DocumentationValueSymbol {
+      function generateValueSymbol (): doc.DocumentationValueSymbol {
         return {
           ...base,
           kind: 'value'
@@ -255,7 +151,7 @@ function createWalker () {
     })
   }
 
-  function getDeclarationPosition (declaration: ts.Node): DocumentationDeclaration | undefined {
+  function getDeclarationPosition (declaration: ts.Node): doc.DocumentationDeclaration | undefined {
     const sourceFile = declaration.getSourceFile()
     const symbol = (sourceFile as any).symbol as ts.Symbol | undefined
     if (!symbol) return null
@@ -274,7 +170,7 @@ function createWalker () {
       : symbol
   }
 
-  function generateSignature (signature: ts.Signature): DocumentationSignature {
+  function generateSignature (signature: ts.Signature): doc.DocumentationSignature {
     return {
       jsdoc: signature.getJsDocTags(),
       comment: signature.getDocumentationComment(),
@@ -293,7 +189,7 @@ function createWalker () {
   }
 
   // Please help me type this function.
-  function getTypeInfo (type: ts.Type, allowGenerics = true): TypeInfo {
+  function getTypeInfo (type: ts.Type, allowGenerics = true): doc.TypeInfo {
     const objectFlags: number = (type as any).objectFlags || 0
     if ((objectFlags & ts.ObjectFlags.Reference) && allowGenerics) {
       const target = (type as any).target as ts.GenericType

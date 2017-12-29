@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@types/minimist": "^1.2.0",
+    "commondir": "^1.0.1",
     "enable-hot-reload": "^1.0.0-3",
     "indent-string": "^3.2.0",
     "minimist": "^1.2.0",
