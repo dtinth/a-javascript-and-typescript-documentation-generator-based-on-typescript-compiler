@@ -1,7 +1,9 @@
 {
   "scripts": {
-    "dev:generate": "ts-node src/generator/cli.ts",
-    "dev:web": "nwb serve-react-app src/web/dev/index.js"
+    "dev:generate": "ts-node src/cli/index.ts",
+    "dev:web": "nwb serve-react-app src/web/dev/index.js",
+    "build": "tsc -p .",
+    "generate": "node lib/cli"
   },
   "dependencies": {
     "commondir": "^1.0.1",

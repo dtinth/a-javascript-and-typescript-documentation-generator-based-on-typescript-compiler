@@ -1,16 +1,16 @@
-import * as doc from './doc'
+import * as doc from '../generator/doc'
 import * as fs from 'fs'
 import * as minimist from 'minimist'
 import * as path from 'path'
 import * as ts from 'typescript'
 
-import generateDocs from './generateDocs'
+import generateDocs from '../generator/generateDocs'
 
 const args = minimist(process.argv.slice(2))
 
 const rootFileNames = (args._.length > 0
   ? args._
-  : [ require.resolve('./test/fixtures/index.ts') ]
+  : [ require.resolve('../../test/fixture/index.ts') ]
 )
 
 const moduleName = args.moduleName || '.'

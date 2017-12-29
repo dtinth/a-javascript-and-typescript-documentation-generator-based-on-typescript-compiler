@@ -3,6 +3,13 @@
     "target": "ES6",
     "allowJs": true,
     "module": "commonjs",
-    "jsx": "react"
-  }
+    "jsx": "react",
+    "rootDir": "src",
+    "outDir": "lib"
+  },
+  "files": [
+    "src/cli/index.ts",
+    "src/generator/index.ts",
+    "src/web/index.js"
+  ]
 }
