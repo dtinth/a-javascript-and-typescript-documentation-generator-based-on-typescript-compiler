@@ -1,0 +1,26 @@
+version: 2
+jobs:
+  build:
+    working_directory: /usr/src/app
+    docker:
+      - image: circleci/node:8-browsers
+    steps:
+      - checkout
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+      - run:
+          name: yarn
+          command: yarn
+      - save_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+          paths:
+            - ./node_modules
+      - run:
+          name: generate html
+          command: yarn dev:generate test/fixture/index.ts --html /tmp/result
+      - run:
+          name: generate json
+          command: yarn dev:generate test/fixture/index.ts --json /tmp/result/documentation.json
+      - store_artifacts:
+          path: /tmp/result
+          prefix: result
