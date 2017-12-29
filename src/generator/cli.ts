@@ -19,8 +19,17 @@ const { documentation, program, checker } = generateDocs(rootFileNames, moduleNa
 
 if (typeof args.json === 'string') {
   fs.writeFileSync(args.json, JSON.stringify(documentation, null, 2))
-} else if (args.out) {
-  throw new Error('TODO: Generate HTML')
+} else if (args.html) {
+  require('mkdirp').sync(args.html)
+  const generateDocumentationSite = require('../web/generateDocumentationSite').default
+  const renderPageToString = require('../web/renderPageToString').default
+  const result = generateDocumentationSite(documentation)
+  for (const page of result.pages) {
+    const outname = path.join(args.html, page.filename)
+    console.error('*', outname)
+    const html = renderPageToString(page)
+    fs.writeFileSync(outname, html)
+  }
 } else {
   console.log(JSON.stringify(documentation, null, 2))
 }

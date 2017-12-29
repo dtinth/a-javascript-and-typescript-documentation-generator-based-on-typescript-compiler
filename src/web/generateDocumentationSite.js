@@ -1,7 +1,8 @@
+import * as React from 'react'
+
 import Item, { ItemInfo, ItemType } from './Item'
 import Sidebar, { SidebarItem, SidebarModule, SidebarNavHeader } from './Sidebar'
 
-import React from 'react'
 import Tableist from './Tableist'
 import styled from 'styled-components'
 
@@ -18,7 +19,8 @@ import styled from 'styled-components'
  */
 export default function generateDocumentationSite (data) {
   return {
-    pages: data.publicModules.map(id => createPage(id))
+    // TODO: Remove the slice
+    pages: data.publicModules.slice(0, 1).map(id => createPage(id))
   }
 
   /**
@@ -27,6 +29,8 @@ export default function generateDocumentationSite (data) {
   function createPage (id) {
     const moduleNode = data.symbols[id]
     return {
+      // TODO: Proper file name generation!
+      filename: 'index.html',
       render () {
         const exported = moduleNode.exportedSymbols
         return {

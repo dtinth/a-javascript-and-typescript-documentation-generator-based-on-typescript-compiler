@@ -1,7 +1,8 @@
+import * as React from 'react'
+
 import { Bordered, colors } from './ui'
 import Window, { WindowTitle } from './Window'
 
-import React from 'react'
 import styled from 'styled-components'
 
 export const Item = ({ title, children }) => (

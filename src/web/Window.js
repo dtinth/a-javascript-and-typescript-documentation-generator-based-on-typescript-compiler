@@ -1,6 +1,7 @@
+import * as React from 'react'
+
 import { Bordered, colors } from './ui'
 
-import React from 'react'
 import styled from 'styled-components'
 
 export const Window = ({ children }) => (

@@ -1,9 +1,10 @@
+import * as React from 'react'
+
 import generateDocumentationSite, {
   renderPage
 } from '../generateDocumentationSite'
 
 import DocumentationLoader from './DocumentationLoader'
-import React from 'react'
 import enableHotReload from 'enable-hot-reload'
 
 const hot = enableHotReload(module)
