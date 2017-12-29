@@ -321,6 +321,12 @@ for (const filename of program.getRootFileNames()) {
   walker.readModule(moduleSymbol)
 }
 
+if (!walker.getState().publicModules.length) {
+  for (const ambientModule of checker.getAmbientModules()) {
+    walker.readModule(ambientModule)
+  }
+}
+
 console.log(JSON.stringify(walker.getState(), null, 2))
 
 // For further testing in REPL...
