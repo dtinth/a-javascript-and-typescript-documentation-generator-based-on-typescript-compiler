@@ -16,6 +16,22 @@ const rootFileNames = [
 //   basePath + '/src/index.js' // '/index.d.ts'
 // ]
 
+// const basePath = '/Users/dtinth/Downloads/mobx-master'
+// const rootFileNames = [
+//   basePath + '/src/mobx.ts' // '/index.d.ts'
+// ]
+
+// const basePath = '/Users/dtinth/GitHub/recompose/src/packages'
+// const rootFileNames = [
+//   basePath + '/recompose/index.js',
+//   basePath + '/recompose-relay/index.js'
+// ]
+
+// const basePath = '/tmp'
+// const rootFileNames = [
+//   basePath + '/immutable.d.ts'
+// ]
+
 interface DocumentationData {
   publicModules: string[]
   symbols: { [id: string]: DocumentationSymbol }

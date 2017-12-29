@@ -1,7 +1,7 @@
 import generateDocumentationSite, { renderPage } from '../generateDocumentationSite'
 
 import React from 'react'
-import data from '/tmp/lol.json'
+import data from '/tmp/redux.json'
 import enableHotReload from 'enable-hot-reload'
 import styled from 'styled-components'
 
