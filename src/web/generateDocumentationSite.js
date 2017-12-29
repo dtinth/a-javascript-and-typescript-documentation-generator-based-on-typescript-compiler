@@ -26,17 +26,10 @@ export default function generateDocumentationSite (data) {
       render () {
         const exported = moduleNode.exportedSymbols
         return {
-          sidebar: renderSidebar(),
+          sidebar: renderSidebar(id),
           content: (
             <div>
               <Heading>Module ‘{moduleNode.name}’</Heading>
-              <TocList>
-                {Object.keys(exported).slice().sort().map(key => {
-                  return (
-                    <TocListItem key={key}>{key}</TocListItem>
-                  )
-                })}
-              </TocList>
               {Object.keys(exported).map(key => {
                 const exportedId = exported[key]
                 return (
@@ -52,16 +45,33 @@ export default function generateDocumentationSite (data) {
     }
   }
 
-  function renderSidebar () {
+  function renderSidebar (currentModuleId) {
     return (
       <nav>
         <SidebarNavHeader>Module list</SidebarNavHeader>
         {data.publicModules.map(id => {
           const moduleNode = data.symbols[id]
-          return <SidebarItem>{moduleNode.name}</SidebarItem>
+          return <SidebarItem key={id}>
+            <SidebarModule>{moduleNode.name}</SidebarModule>
+            {id === currentModuleId && renderIndex(currentModuleId)}
+          </SidebarItem>
         })}
       </nav>
     )
+
+    function renderIndex (id) {
+      const moduleNode = data.symbols[id]
+      const exported = moduleNode.exportedSymbols
+      return (
+        <TocList>
+          {Object.keys(exported).slice().sort().map(key => {
+            return (
+              <TocListItem key={key}>{key}</TocListItem>
+            )
+          })}
+        </TocList>
+      )
+    }
   }
 
   function renderSymbolDocumentation (id) {
@@ -80,12 +90,110 @@ export default function generateDocumentationSite (data) {
       <article>
         <ItemType>{symbol.typeString}</ItemType>
         <ItemInfo>
-          <p>{symbol.comment.map(x => x.text)}</p>
+          <Doc thing={symbol} />
+          {symbol.kind === 'function' && renderList('Call signatures', renderSignatures(symbol.callSignatures))}
+          {symbol.kind === 'class' && <React.Fragment>
+            {symbol.constructSignatures.length > 0 && renderList('Constructors', renderSignatures(symbol.constructSignatures))}
+            {Object.keys(symbol.classMembers).length > 0 && renderList('Class members', renderMembers(symbol.classMembers))}
+            {Object.keys(symbol.instanceMembers).length > 0 && renderList('Instance members', renderMembers(symbol.instanceMembers))}
+          </React.Fragment>}
         </ItemInfo>
       </article>
     )
   }
+
+  function renderSignatures (signatures) {
+    return signatures.map((signature, index) =>
+      <details key={index}>
+        <summary>
+          ({signature.parameters.map((param, index) => {
+            return <React.Fragment key={index}>
+              {index > 0 && ', '}
+              <strong>{param.name}</strong>: {param.typeString}
+            </React.Fragment>
+          })}): {signature.returnType}
+        </summary>
+        <div>
+          <Doc thing={signature} />
+          {signature.parameters.length > 0 && <React.Fragment>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+              {signature.parameters.map((param, index) => {
+                return <li key={index}>
+                  <strong>{param.name}</strong>: {param.typeString}
+                  <Doc thing={param} />
+                </li>
+              })}
+            </ul>
+          </React.Fragment>}
+          <p><strong>Returns</strong> {signature.returnType}</p>
+        </div>
+      </details>
+    )
+  }
+
+  function renderMembers (members) {
+    return Object.keys(members).map(key => {
+      const id = members[key]
+      const targetSymbol = data.symbols[id]
+      return <details key={key}>
+        <summary><strong>{key}</strong>: {renderSymbolRepresentationInline(members[key])}</summary>
+        {!!targetSymbol && <React.Fragment>
+          <Doc thing={targetSymbol} />
+          {targetSymbol.kind === 'function' && renderList('Call signatures', renderSignatures(targetSymbol.callSignatures))}
+        </React.Fragment>}
+      </details>
+    })
+  }
+
+  function renderList (title, elements) {
+    return (
+      <Tableist>
+        <Tableist.Title>{title}</Tableist.Title>
+        {elements.map(element =>
+          <Tableist.Item key={element.key}>{element}</Tableist.Item>
+        )}
+      </Tableist>
+    )
+  }
+
+  function renderSymbolRepresentationInline (id) {
+    const symbol = data.symbols[id]
+    if (!symbol) return '?'
+    if (symbol.kind === 'module') {
+      return <span>module ‘{symbol.name}’</span>
+    }
+    return <span>{symbol.typeString}</span>
+  }
 }
+
+function Doc ({ thing }) {
+  return <React.Fragment>
+    <p>{thing.comment.map(x => x.text)}</p>
+  </React.Fragment>
+}
+
+const Section = ({ title, children }) => (
+  <section>
+    <h3>{title}</h3>
+    {children}
+  </section>
+)
+
+const Tableist = styled.ul`
+  padding: 0;
+  list-style: none;
+  border: 1px solid #bbb;
+`
+Tableist.Title = styled.li`
+  padding: 5px;
+  background: #e5e5e5;
+  font-weight: bold;
+`
+Tableist.Item = styled.li`
+  padding: 10px;
+  border-top: 1px solid #bbb;
+`
 
 /**
  * @param {Page} page
@@ -123,10 +231,15 @@ const Sidebar = styled.div`
   background: #000;
   color: #fff;
   font-family: Comic Sans MS, sans-serif;
+  overflow: auto;
+  overflow-x: hidden;
 `
 const SidebarItem = styled.span`
   display: block;
   padding: 3px 8px;
+`
+const SidebarModule = styled.span`
+  color: #0f0;
 `
 const SidebarNavHeader = styled.p`
   text-align: center;
