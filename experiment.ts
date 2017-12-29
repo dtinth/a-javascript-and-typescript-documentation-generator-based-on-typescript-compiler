@@ -207,7 +207,7 @@ function createWalker () {
         const members: Map<string, ts.Symbol> = (symbol as any).members
         const mapMembers = (map: Map<string, ts.Symbol>) => {
           const out = { }
-          map.forEach((value, key) => {
+          map && map.forEach((value, key) => {
             out[key] = walkExportedSymbol(resolveSymbol(value), declaration)
           })
           return out
