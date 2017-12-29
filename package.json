@@ -1,12 +1,10 @@
 {
   "scripts": {
-    "dev:generate": "ts-node -O '{\"allowJs\":false}' -r @babel/register src/generator/cli.ts",
+    "dev:generate": "ts-node src/generator/cli.ts",
     "dev:web": "nwb serve-react-app src/web/dev/index.js"
   },
   "dependencies": {
-    "@types/minimist": "^1.2.0",
     "commondir": "^1.0.1",
-    "enable-hot-reload": "^1.0.0-3",
     "indent-string": "^3.2.0",
     "minimist": "^1.2.0",
     "mkdirp": "^0.5.1",
@@ -16,12 +14,12 @@
     "typescript": "^2.6.2"
   },
   "devDependencies": {
-    "@babel/cli": "^7.0.0-beta.36",
-    "@babel/core": "^7.0.0-beta.36",
-    "@babel/preset-env": "^7.0.0-beta.36",
-    "@babel/preset-react": "^7.0.0-beta.36",
-    "@babel/register": "^7.0.0-beta.36",
+    "@types/minimist": "^1.2.0",
     "@types/node": "^8.5.2",
+    "@types/react": "^16.0.31",
+    "@types/react-dom": "^16.0.3",
+    "awesome-typescript-loader": "^3.4.1",
+    "enable-hot-reload": "^1.0.0-3",
     "eslint": "^4.14.0",
     "eslint-config-standard": "^11.0.0-beta.0",
     "eslint-config-standard-react": "^5.0.0",
