@@ -171,6 +171,7 @@ function createWalker () {
       const constructSignatures = checker.getSignaturesOfType(type, ts.SignatureKind.Construct)
 
       const typeString = typeToString(type, declaration || undefined)
+      const objectFlags: number = (type as any).objectFlags || 0
       const base: DocumentationTypedSymbol = {
         ...symbolBase(symbol),
         typeString,
@@ -180,7 +181,7 @@ function createWalker () {
       if (declaration) {
         base.declaration = getDeclarationPosition(declaration)
       }
-      if (constructSignatures.length) {
+      if (objectFlags & ts.ObjectFlags.ClassOrInterface) {
         return generateClassSymbol()
       }
       if (callSignatures.length) {
