@@ -7,6 +7,7 @@ I am looking for a documentation generator tool that works for me.
 I haven’t found one yet, so I am creating one, using the minimal amount of code possible.
 
 
+
 ## Inspiration
 
   - Visual Studio Code’s JavaScript IntelliSense (based on TypeScript) is very smart.
@@ -42,34 +43,54 @@ I haven’t found one yet, so I am creating one, using the minimal amount of cod
     then create a documentation generator (loosely) based on that knowledge.
 
 
-## Overview
 
-1. Input is a list of public modules. Usually **index.js**.
-
-2. TypeScript compiler tries to compile the module, resolving types and stuff.
-
-3. Look at the **exported symbols** and generate the docs just for them.
-
-
-## Data model
-
-- Documentation contains modules.
-
-- Module exports symbols.
-
-- A symbol is declared at some node.
-
-- The symbol, together with the node that declared it, allows TypeScript compiler to infer the type.
-
-- A type may refer to other symbols. e.g. `(a: A) => B` refers to types A and B.
-
-
-## Development
-
-To run the experiment,
+## Process
 
 ```
-./node_modules/.bin/ts-node ./experiment.ts
+                `ts.createProgram()`
+                        |
++-------------------+   |   +--------------------+
+|    Input files    | ----> | TypeScript program |
+| (.js, .ts, .d.ts) |       |   (`ts.Program`)   |
++-------------------+       +--------------------+
+                                | walk the modules and symbols
+                                V
+     +-----------------------------------------+
+     | Documentation model (JSON-serializable) |
+     +-----------------------------------------+
+         | generate             | export
+         V                      V
+     +-------------------+   +---------------+
+     | Web pages (.html) |   | Model (.json) |
+     +-------------------+   +---------------+
 ```
 
-It tries to generate some stuff based on `test/fixture/index.js`.
+  - Input files are fed into TypeScript compilers, which will resolve all
+    modules, infer types, and lots of super-cool stuff.
+    It results in a **ts.Program** object.
+
+  - a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler
+    goes through the modules, and collect documentation data, into a JSON-serializable model.
+
+  - Then we can generate a web page / readme file / whatever out of it!
+
+
+## Usage / Development
+
+This thing is still in development.
+
+1.  Clone this project.
+
+2.  Install the dependencies:
+
+    ```
+    yarn
+    ```
+
+3.  To generate a documentation JSON:
+
+    ```
+    ./node_modules/.bin/ts-node src/generator/cli.ts test/fixture/index.ts
+    #                            |                    |
+    #                           CLI                  Input file
+    ```
