@@ -190,6 +190,7 @@ export function renderPage (page) {
       <Container>
         {renderResult.content}
       </Container>
+      :)
     </Main>
   </div>
 }
