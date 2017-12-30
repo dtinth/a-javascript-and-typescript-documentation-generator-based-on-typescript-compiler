@@ -5,12 +5,12 @@ import * as ts from 'typescript'
 
 import createWalker from './createWalker'
 
-interface GenerateDocsResult {
-  documentation: doc.DocumentationData
-  program: ts.Program
-  checker: ts.TypeChecker
-}
-
+/**
+ * Generates a documentation data.
+ *
+ * @param rootFilename An array representing filepaths of public modules.
+ * @param moduleName The module name that you are generating a documentation for.
+ */
 export default function generateDocs (rootFileNames: string[], moduleName: string = '.'): GenerateDocsResult {
   rootFileNames = rootFileNames.map(n => fs.realpathSync(n))
   const basePath = require('commondir')(rootFileNames.map(f => path.dirname(f)))
@@ -40,4 +40,22 @@ export default function generateDocs (rootFileNames: string[], moduleName: strin
     program,
     checker
   }
+}
+
+/**
+ * The result of calling `generateDocs()`.
+ */
+export interface GenerateDocsResult {
+  /**
+   * The documentation data.
+   */
+  documentation: doc.DocumentationData
+  /**
+   * The `ts.Program` instance created from generating the documentation.
+   */
+  program: ts.Program
+  /**
+   * The `ts.TypeChecker` for the `program`.
+   */
+  checker: ts.TypeChecker
 }

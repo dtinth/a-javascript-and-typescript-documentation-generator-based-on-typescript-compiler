@@ -6,10 +6,28 @@ It is powered by the TypeScript compiler, which also powers the [JavaScript and 
 This means your documented code will be picked up by IDEs
 (such as Visual Studio, VS Code, or Atom-IDE) to provide auto-completions the same way!
 
-:construction: :construction: :construction:
-**This is under construction!**
-:construction: :construction: :construction:
 
+Instead of “looking for functions/variables/constants/classes declared in a file,”
+it looks at each public module and walks through each exported symbol.
+This means it understands modules that re-exports things like this:
+
+```js
+// index.ts
+import * as doc from './doc'
+
+export { doc }
+export { default as generateDocs, GenerateDocsResult } from './generateDocs'
+```
+
+And generates a documentation like this:
+
+![Generated docs](docs/images/example-re-export.png)
+
+<p align="center">
+  :construction: :construction: :construction:
+  **This project is under construction!**
+  :construction: :construction: :construction:
+</p>
 
 ## Inspiration
 
