@@ -116,9 +116,34 @@ Which generates a documentation like this
   - Then we can generate a web page / readme file / whatever out of it!
 
 
-## Usage / Development
+## Usage
 
-This thing is still in development.
+**Warning:**
+This is still in development, and it might not work well.
+Please be prepared to dive into the source code.
+
+Installation:
+
+```
+yarn global add a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler
+```
+
+Generate HTML documentation:
+
+```
+a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler src/index.js --html docs/api
+```
+
+Generate JSON to stdout:
+
+```
+a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler src/index.js --json docs/api.json
+```
+
+JSON model is defined at [src/generator/doc.ts](src/generator/doc.ts).
+
+
+## development
 
 1.  Clone this project.
 

@@ -8,10 +8,21 @@ import generateDocs from '../generator/generateDocs'
 
 const args = minimist(process.argv.slice(2))
 
-const rootFileNames = (args._.length > 0
-  ? args._
-  : [ require.resolve('../../test/fixture/index.ts') ]
-)
+const rootFileNames = args._
+
+if (!rootFileNames.length) {
+  console.error('No input files specified.')
+  console.log()
+  console.log('Usage:')
+  console.log('    a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler <inputfile.ts ...> [--json <docs/api.json>] [--html <docs/api>]')
+  console.log('')
+  console.log('Arguments:')
+  console.log('    --json FILE    Generates a JSON file.')
+  console.log('    --html DIR     Generates a documentation site into DIR.')
+  console.log('')
+  console.log('Have fun ^_^')
+  process.exit(1)
+}
 
 const moduleName = args.moduleName || '.'
 
@@ -33,10 +44,3 @@ if (typeof args.json === 'string') {
 } else {
   console.log(JSON.stringify(documentation, null, 2))
 }
-
-// For further testing in REPL...
-Object.assign(global, {
-  ts,
-  program,
-  checker
-})

@@ -1,9 +1,19 @@
 {
+  "name": "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler",
+  "files": [
+    "lib",
+    "bin"
+  ],
+  "bin": {
+    "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler": "./bin/cli.js"
+  },
+  "version": "0.0.1-1",
   "scripts": {
     "dev:generate": "ts-node src/cli/index.ts",
     "dev:web": "nwb serve-react-app src/web/dev/index.js",
     "build": "tsc -p .",
-    "generate": "node lib/cli"
+    "generate": "node lib/cli",
+    "prepublish": "rm -rf lib && yarn build"
   },
   "dependencies": {
     "commondir": "^1.0.1",
@@ -33,5 +43,22 @@
     "nwb": "^0.20.0",
     "style-loader": "^0.19.1",
     "ts-node": "^4.1.0"
-  }
+  },
+  "description": "A documentation generator that understands ES modules and infers types. It is powered by the TypeScript compiler, lol.",
+  "main": "lib/generator/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dtinth/a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler.git"
+  },
+  "keywords": [
+    "docs",
+    "documentation-generator",
+    "documentation"
+  ],
+  "author": "Thai Pangsakulyanont <org.yi.dttvb@gmail.com> (http://dt.in.th/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dtinth/a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler/issues"
+  },
+  "homepage": "https://github.com/dtinth/a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler#readme"
 }

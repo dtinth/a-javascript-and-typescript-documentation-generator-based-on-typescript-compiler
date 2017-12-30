@@ -41,8 +41,9 @@ export interface DocumentationComment {
  */
 export interface DocumentationSymbolBase extends DocumentationComment {
   name: string
-  symbolFlags: number
   declaration?: DocumentationDeclaration
+  /** Raw [[ts.SymbolFlags]] from TypeScript. For ease of debugging. */
+  _symbolFlags: number
 }
 
 export interface DocumentationDeclaration {
@@ -53,8 +54,11 @@ export interface DocumentationDeclaration {
 
 export interface DocumentationType {
   typeString: string
-  typeFlags: number
   typeInfo: TypeInfo
+  /** Raw [[ts.TypeFlags]] from TypeScript. For ease of debugging. */
+  _typeFlags: number
+  /** Raw [[ts.ObjectFlags]] from TypeScript. For ease of debugging. */
+  _objectFlags: number
 }
 
 /**

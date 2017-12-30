@@ -21,7 +21,7 @@ export default function createWalker (program: ts.Program, basePath: string, mod
       name: name,
       jsdoc: symbol.getJsDocTags(),
       comment: symbol.getDocumentationComment(),
-      symbolFlags: symbol.getFlags()
+      _symbolFlags: symbol.getFlags()
     }
   }
 
@@ -77,9 +77,9 @@ export default function createWalker (program: ts.Program, basePath: string, mod
       const objectFlags: number = (type as any).objectFlags || 0
       const base: doc.DocumentationTypedSymbol = {
         ...symbolBase(symbol),
+        _typeFlags: type.getFlags(),
+        _objectFlags: objectFlags,
         typeString,
-        typeFlags: type.getFlags(),
-        objectFlags,
         typeInfo: getTypeInfo(type)
       }
       if (declaration) {
