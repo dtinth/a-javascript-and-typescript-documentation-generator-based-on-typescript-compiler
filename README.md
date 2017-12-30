@@ -23,9 +23,29 @@ And generates a documentation like this:
 
 ![Generated docs](docs/images/example-re-export.png)
 
+It also works with JavaScript file. In this case, [TypeScript compiler reads the type annotation from JSDog tags](https://github.com/Microsoft/TypeScript/wiki/JSDoc-support-in-JavaScript).
+
+```js
+/**
+ * Calculates the accuracy.
+ * @param {number[]} count The 3-element array containing METICULOUS judgment,
+ * PRECISE judgment, and GOOD judgment, respectively.
+ * @param {number} total The total amount of possible judgments that may be given.
+ * @returns the accuracy number, from 0 to 1
+ */
+export function calculateAccuracy (count, total) {
+  return (count[0] + count[1] * 0.8 + count[2] * 0.5) / total
+}
+```
+
+Which generates a documentation like this
+(note: the return type is inferred by the compiler):
+
+![Generated docs](docs/images/example-js.png)
+
 <p align="center">
   :construction: :construction: :construction:
-  **This project is under construction!**
+  <strong>This project is under construction!</strong>
   :construction: :construction: :construction:
 </p>
 
