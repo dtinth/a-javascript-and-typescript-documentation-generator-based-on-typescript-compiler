@@ -79,12 +79,15 @@ export default function createWalker (program: ts.Program, basePath: string, mod
         ...symbolBase(symbol),
         typeString,
         typeFlags: type.getFlags(),
+        objectFlags,
         typeInfo: getTypeInfo(type)
       }
       if (declaration) {
         base.declaration = getDeclarationPosition(declaration)
       }
-      if (objectFlags & ts.ObjectFlags.ClassOrInterface) {
+      // XXX: Check for `constructSignatures.length` as the compiler doesn’t
+      // seem to mark classes in JS files with ClassOrInterface object flags.
+      if ((objectFlags & ts.ObjectFlags.ClassOrInterface) || constructSignatures.length) {
         return generateClassSymbol()
       }
       if (callSignatures.length) {
