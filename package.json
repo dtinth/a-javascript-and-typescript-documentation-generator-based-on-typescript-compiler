@@ -7,7 +7,7 @@
   "bin": {
     "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler": "./bin/cli.js"
   },
-  "version": "0.0.1-1",
+  "version": "0.0.1-2",
   "scripts": {
     "dev:generate": "ts-node src/cli/index.ts",
     "dev:web": "nwb serve-react-app src/web/dev/index.js",
