@@ -1,8 +1,8 @@
 import * as doc from '../generator/doc'
-import * as fs from 'fs'
-import * as minimist from 'minimist'
-import * as path from 'path'
-import * as ts from 'typescript'
+import ts from 'typescript'
+import fs from 'fs'
+import minimist from 'minimist'
+import path from 'path'
 
 import generateDocs from '../generator/generateDocs'
 

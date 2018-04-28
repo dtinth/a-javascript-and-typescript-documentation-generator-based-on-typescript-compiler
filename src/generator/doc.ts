@@ -1,3 +1,5 @@
+import { JSDocTagInfo, SymbolDisplayPart } from "typescript";
+
 /**
  * Documentation JSON-compatible model
  */
@@ -32,8 +34,8 @@ export type TypeInfo =
  * Textual comments for symbols, call signatures, ….
  */
 export interface DocumentationComment {
-  jsdoc: any
-  comment: any
+  jsdoc: JSDocTagInfo[]
+  comment: SymbolDisplayPart[]
 }
 
 /**

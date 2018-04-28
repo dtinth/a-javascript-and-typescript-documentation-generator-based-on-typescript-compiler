@@ -1,13 +1,10 @@
 import * as React from 'react'
-import * as enableHotReload from 'enable-hot-reload'
 
 import generateDocumentationSite, {
   renderPage
 } from '../generateDocumentationSite'
 
 import DocumentationLoader from './DocumentationLoader'
-
-const hot = enableHotReload(module)
 
 function Error ({ children }) {
   return (
@@ -44,4 +41,4 @@ function App () {
   )
 }
 
-export default hot(React, App)
+export default App

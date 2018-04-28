@@ -1,10 +1,8 @@
 import * as React from 'react'
 
-export default class DocumentationLoader extends React.Component {
-  constructor (props) {
-    super(props)
-    this.state = { data: 'Loading...' }
-  }
+export default class DocumentationLoader extends React.Component<any, any> {
+  state = { data: 'Loading...' }
+
   async componentDidMount () {
     try {
       const json = await window.fetch('/docs-data').then(res => res.json())

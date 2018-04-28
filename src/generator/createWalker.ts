@@ -1,6 +1,6 @@
 import * as doc from './doc'
-import * as path from 'path'
-import * as ts from 'typescript'
+import path from 'path'
+import ts from 'typescript'
 
 export default function createWalker (program: ts.Program, basePath: string, moduleName: string) {
   const checker = program.getTypeChecker()
@@ -20,7 +20,7 @@ export default function createWalker (program: ts.Program, basePath: string, mod
     return {
       name: name,
       jsdoc: symbol.getJsDocTags(),
-      comment: symbol.getDocumentationComment(),
+      comment: symbol.getDocumentationComment(checker),
       _symbolFlags: symbol.getFlags()
     }
   }
@@ -167,7 +167,7 @@ export default function createWalker (program: ts.Program, basePath: string, mod
   function generateSignature (signature: ts.Signature): doc.DocumentationSignature {
     return {
       jsdoc: signature.getJsDocTags(),
-      comment: signature.getDocumentationComment(),
+      comment: signature.getDocumentationComment(checker),
       parameters: signature.getParameters().map(parameter => {
         return {
           ...symbolBase(parameter),
