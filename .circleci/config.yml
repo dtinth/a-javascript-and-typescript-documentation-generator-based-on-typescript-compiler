@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: ~/src
     docker:
-      - image: circleci/node:8-browsers
+      - image: circleci/node:12
     steps:
       - checkout
       - restore_cache:
@@ -19,14 +19,8 @@ jobs:
           name: build
           command: yarn build
       - run:
-          name: generate html
-          command: yarn generate test/fixture/index.ts --html /tmp/result
-      - run:
           name: generate json
-          command: yarn generate test/fixture/index.ts --json /tmp/result/documentation.json
-      - run:
-          name: generate screenshot
-          command: google-chrome --headless --disable-gpu --screenshot=/tmp/result/screenshot.png --window-size=1280,1696 /tmp/result/index.html
+          command: node bin/cli test/fixture/index.ts -o /tmp/result/documentation.json
       - store_artifacts:
           path: /tmp/result
           prefix: result
