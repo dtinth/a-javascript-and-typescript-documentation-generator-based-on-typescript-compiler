@@ -10,7 +10,7 @@ import { createWalker } from './ProgramWalker'
  * @param rootFilename An array representing filepaths of public modules.
  * @param moduleName The module name that you are generating a documentation for.
  */
-export default function generateDocs(
+export function generateDocs(
   rootFileNames: string[],
   moduleName: string = '.',
 ): GenerateDocsResult {
@@ -27,7 +27,8 @@ export default function generateDocs(
 
   for (const filename of program.getRootFileNames()) {
     const file = program.getSourceFile(filename)
-    const moduleSymbol = (file as any).symbol
+    if (!file) continue
+    const moduleSymbol = checker.getSymbolAtLocation(file)
     if (!moduleSymbol) continue
     walker.readModule(moduleSymbol)
   }

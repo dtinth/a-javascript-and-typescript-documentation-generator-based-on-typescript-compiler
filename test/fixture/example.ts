@@ -1,4 +1,4 @@
-import { createActor, stuff } from '.'
+import { createActor, stuff } from './index'
 
 const actor = createActor()
 actor.acquire(new stuff.Pen())

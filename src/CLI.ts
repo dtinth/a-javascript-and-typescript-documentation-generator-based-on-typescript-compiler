@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as tkt from 'tkt'
-import generateDocs from './generateDocs'
+import { generateDocs } from './DocumentationGenerator'
 
 export function startCli() {
   return tkt
