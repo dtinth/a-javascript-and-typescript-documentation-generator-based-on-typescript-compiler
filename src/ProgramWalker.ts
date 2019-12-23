@@ -1,31 +1,37 @@
-import * as doc from './doc'
+import * as DataModel from './DataModel'
 import * as path from 'path'
-import * as ts from 'typescript'
+import ts from 'typescript'
 
-export default function createWalker (program: ts.Program, basePath: string, moduleName: string) {
+export function createWalker(
+  program: ts.Program,
+  basePath: string,
+  moduleName: string,
+) {
   const checker = program.getTypeChecker()
 
-  const state: doc.DocumentationData = {
-    publicModules: [ ],
-    symbols: { }
+  const state: DataModel.Documentation = {
+    publicModules: [],
+    symbols: {},
   }
 
   let nextId = 1
   const idMap = new Map<ts.Symbol, string>()
 
-  function symbolBase (symbol: ts.Symbol): doc.DocumentationSymbolBase {
-    const name = (symbol.flags & ts.SymbolFlags.Module)
-      ? rewriteModuleName(symbol.getName())
-      : symbol.getName()
+  function symbolBase(symbol: ts.Symbol): DataModel.BaseSymbol {
+    const name =
+      symbol.flags & ts.SymbolFlags.Module
+        ? rewriteModuleName(symbol.getName())
+        : symbol.getName()
     return {
       name: name,
       jsdoc: symbol.getJsDocTags(),
-      comment: symbol.getDocumentationComment(),
-      _symbolFlags: symbol.getFlags()
+      declaration: null,
+      comment: symbol.getDocumentationComment(checker),
+      _symbolFlags: symbol.getFlags(),
     }
   }
 
-  function rewriteModuleName (name): string {
+  function rewriteModuleName(name: string): string {
     name = name.replace(/"/g, '').replace(/\\/g, '/')
 
     // Absolute path (non-ambient module)
@@ -48,9 +54,12 @@ export default function createWalker (program: ts.Program, basePath: string, mod
     return name
   }
 
-  function visitSymbol (symbol: ts.Symbol, visitor: (symbol: ts.Symbol) => doc.DocumentationSymbol): string {
+  function visitSymbol(
+    symbol: ts.Symbol,
+    visitor: (symbol: ts.Symbol) => DataModel.Symbol,
+  ): string {
     if (idMap.has(symbol)) {
-      return idMap.get(symbol)
+      return idMap.get(symbol)!
     }
     const id = String(nextId++)
     idMap.set(symbol, id)
@@ -58,11 +67,11 @@ export default function createWalker (program: ts.Program, basePath: string, mod
     return id
   }
 
-  function readModule (moduleSymbol: ts.Symbol) {
+  function readModule(moduleSymbol: ts.Symbol) {
     state.publicModules.push(walkExportedSymbol(moduleSymbol))
   }
 
-  function walkExportedSymbol (symbol: ts.Symbol, declaration?: ts.Node) {
+  function walkExportedSymbol(symbol: ts.Symbol, declaration?: ts.Node) {
     return visitSymbol(symbol, () => {
       if (symbol.flags & ts.SymbolFlags.Module) {
         return generateModuleSymbol()
@@ -70,24 +79,33 @@ export default function createWalker (program: ts.Program, basePath: string, mod
 
       declaration = symbol.valueDeclaration || declaration
       const type = getType(symbol, declaration)
-      const callSignatures = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
-      const constructSignatures = checker.getSignaturesOfType(type, ts.SignatureKind.Construct)
+      const callSignatures = checker.getSignaturesOfType(
+        type,
+        ts.SignatureKind.Call,
+      )
+      const constructSignatures = checker.getSignaturesOfType(
+        type,
+        ts.SignatureKind.Construct,
+      )
 
       const typeString = typeToString(type, declaration || undefined)
       const objectFlags: number = (type as any).objectFlags || 0
-      const base: doc.DocumentationTypedSymbol = {
+      const base: DataModel.TypedSymbol = {
         ...symbolBase(symbol),
         _typeFlags: type.getFlags(),
         _objectFlags: objectFlags,
         typeString,
-        typeInfo: getTypeInfo(type)
+        typeInfo: getTypeInfo(type),
       }
       if (declaration) {
         base.declaration = getDeclarationPosition(declaration)
       }
       // XXX: Check for `constructSignatures.length` as the compiler doesn’t
       // seem to mark classes in JS files with ClassOrInterface object flags.
-      if ((objectFlags & ts.ObjectFlags.ClassOrInterface) || constructSignatures.length) {
+      if (
+        objectFlags & ts.ObjectFlags.ClassOrInterface ||
+        constructSignatures.length
+      ) {
         return generateClassSymbol()
       }
       if (callSignatures.length) {
@@ -95,11 +113,11 @@ export default function createWalker (program: ts.Program, basePath: string, mod
       }
       return generateValueSymbol()
 
-      function generateModuleSymbol (): doc.DocumentationModule {
-        const out: doc.DocumentationModule = {
+      function generateModuleSymbol(): DataModel.ModuleSymbol {
+        const out: DataModel.ModuleSymbol = {
           ...symbolBase(symbol),
           kind: 'module',
-          exportedSymbols: { }
+          exportedSymbols: {},
         }
         for (const exportedSymbol of checker.getExportsOfModule(symbol)) {
           const resolvedSymbol = resolveSymbol(exportedSymbol)
@@ -108,44 +126,51 @@ export default function createWalker (program: ts.Program, basePath: string, mod
         }
         return out
       }
-      function generateClassSymbol (): doc.DocumentationClassSymbol {
+      function generateClassSymbol(): DataModel.ClassSymbol {
         const exports: Map<string, ts.Symbol> = (symbol as any).exports
         const members: Map<string, ts.Symbol> = (symbol as any).members
         const mapMembers = (map: Map<string, ts.Symbol>) => {
-          const out = { }
-          map && map.forEach((value, key) => {
-            out[key] = walkExportedSymbol(resolveSymbol(value), declaration)
-          })
+          const out: { [k: string]: any } = {}
+          map &&
+            map.forEach((value, key) => {
+              out[key] = walkExportedSymbol(resolveSymbol(value), declaration)
+            })
           return out
         }
         return {
           ...base,
           kind: 'class',
-          constructSignatures: constructSignatures.map(signature => generateSignature(signature)),
+          constructSignatures: constructSignatures.map(signature =>
+            generateSignature(signature),
+          ),
           classMembers: mapMembers(exports),
           instanceMembers: mapMembers(members),
-          bases: (checker.getBaseTypes(type as ts.InterfaceType) || [ ])
+          bases: (checker.getBaseTypes(type as ts.InterfaceType) || [])
             .map(type => type.symbol && walkExportedSymbol(type.symbol))
-            .filter(id => id)
+            .filter(id => id),
         }
       }
-      function generateFunctionSymbol (): doc.DocumentationFunctionSymbol {
+      function generateFunctionSymbol(): DataModel.FunctionSymbol {
         return {
           ...base,
           kind: 'function',
-          callSignatures: callSignatures.map(signature => generateSignature(signature))
+          callSignatures: callSignatures.map(signature =>
+            generateSignature(signature),
+          ),
         }
       }
-      function generateValueSymbol (): doc.DocumentationValueSymbol {
+      function generateValueSymbol(): DataModel.ValueSymbol {
         return {
           ...base,
-          kind: 'value'
+          kind: 'value',
         }
       }
     })
   }
 
-  function getDeclarationPosition (declaration: ts.Node): doc.DocumentationDeclaration | undefined {
+  function getDeclarationPosition(
+    declaration: ts.Node,
+  ): DataModel.Declaration | null {
     const sourceFile = declaration.getSourceFile()
     const symbol = (sourceFile as any).symbol as ts.Symbol | undefined
     if (!symbol) return null
@@ -154,45 +179,52 @@ export default function createWalker (program: ts.Program, basePath: string, mod
     return {
       module: walkExportedSymbol(symbol),
       line: start.line,
-      character: start.character
+      character: start.character,
     }
   }
 
-  function resolveSymbol (symbol: ts.Symbol): ts.Symbol {
-    return (symbol.flags & ts.SymbolFlags.Alias)
+  function resolveSymbol(symbol: ts.Symbol): ts.Symbol {
+    return symbol.flags & ts.SymbolFlags.Alias
       ? checker.getAliasedSymbol(symbol)
       : symbol
   }
 
-  function generateSignature (signature: ts.Signature): doc.DocumentationSignature {
+  function generateSignature(signature: ts.Signature): DataModel.Signature {
     return {
       jsdoc: signature.getJsDocTags(),
-      comment: signature.getDocumentationComment(),
+      comment: signature.getDocumentationComment(checker),
       parameters: signature.getParameters().map(parameter => {
         return {
           ...symbolBase(parameter),
-          typeString: typeToString(getType(parameter))
+          typeString: typeToString(getType(parameter)),
         }
       }),
-      returnType: typeToString(signature.getReturnType())
+      returnType: typeToString(signature.getReturnType()),
     }
   }
 
-  function typeToString (type: ts.Type, declaration?: ts.Node): string {
-    return checker.typeToString(type, declaration, ts.TypeFormatFlags.NoTruncation)
+  function typeToString(type: ts.Type, declaration?: ts.Node): string {
+    return checker.typeToString(
+      type,
+      declaration,
+      ts.TypeFormatFlags.NoTruncation,
+    )
   }
 
   // Please help me type this function.
-  function getTypeInfo (type: ts.Type, allowGenerics = true): doc.TypeInfo {
+  function getTypeInfo(
+    type: ts.Type,
+    allowGenerics = true,
+  ): DataModel.TypeInfo {
     const objectFlags: number = (type as any).objectFlags || 0
-    if ((objectFlags & ts.ObjectFlags.Reference) && allowGenerics) {
+    if (objectFlags & ts.ObjectFlags.Reference && allowGenerics) {
       const target = (type as any).target as ts.GenericType
-      const typeArguments = (type as any).typeArguments || [ ]
+      const typeArguments = (type as any).typeArguments || []
       if (typeArguments.length) {
         return {
-          kind: 'lol no generics',
+          kind: 'type reference',
           target: getTypeInfo(target, false),
-          typeArguments: typeArguments.map(arg => getTypeInfo(arg))
+          typeArguments: typeArguments.map((arg: any) => getTypeInfo(arg)),
         }
       }
     }
@@ -200,17 +232,17 @@ export default function createWalker (program: ts.Program, basePath: string, mod
       if (objectFlags & ts.ObjectFlags.ClassOrInterface) {
         return {
           kind: 'symbol',
-          symbol: walkExportedSymbol(type.symbol)
+          symbol: walkExportedSymbol(type.symbol),
         }
       }
     }
     return {
       kind: 'other',
-      text: typeToString(type)
+      text: typeToString(type),
     }
   }
 
-  function getType (symbol: ts.Symbol, declaration?: ts.Node): ts.Type {
+  function getType(symbol: ts.Symbol, declaration?: ts.Node): ts.Type {
     declaration = symbol.valueDeclaration || declaration
     return declaration
       ? checker.getTypeOfSymbolAtLocation(symbol, declaration)

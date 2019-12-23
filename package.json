@@ -1,51 +1,41 @@
 {
   "name": "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
   "files": [
-    "lib",
+    "dist",
     "bin"
   ],
   "bin": {
     "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler": "./bin/cli.js"
   },
-  "version": "0.0.1-2",
+  "version": "0.1.0-0",
   "scripts": {
-    "dev:generate": "ts-node src/cli/index.ts",
-    "dev:web": "nwb serve-react-app src/web/dev/index.js",
-    "build": "tsc -p .",
-    "generate": "node lib/cli",
-    "prepare": "rm -rf lib && yarn build"
+    "start": "tsdx watch --target=node",
+    "build": "tsdx build --target=node",
+    "test": "tsdx test",
+    "lint": "tsdx lint",
+    "prepare": "tsdx build --target=node"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "tsdx lint"
+    }
   },
   "dependencies": {
     "commondir": "^1.0.1",
-    "indent-string": "^3.2.0",
-    "minimist": "^1.2.0",
     "mkdirp": "^0.5.1",
-    "react": "^16.2.0",
-    "react-dom": "^16.2.0",
-    "styled-components": "^2.4.0",
-    "typescript": "^2.6.2"
+    "tkt": "^2.0.0"
   },
   "devDependencies": {
-    "@types/minimist": "^1.2.0",
-    "@types/node": "^8.5.2",
-    "@types/react": "^16.0.31",
-    "@types/react-dom": "^16.0.3",
-    "awesome-typescript-loader": "^3.4.1",
-    "enable-hot-reload": "^1.0.0-3",
-    "eslint": "^4.14.0",
-    "eslint-config-standard": "^11.0.0-beta.0",
-    "eslint-config-standard-react": "^5.0.0",
-    "eslint-plugin-import": "^2.8.0",
-    "eslint-plugin-node": "^5.2.1",
-    "eslint-plugin-promise": "^3.6.0",
-    "eslint-plugin-react": "^7.5.1",
-    "eslint-plugin-standard": "^3.0.1",
-    "nwb": "^0.20.0",
-    "style-loader": "^0.19.1",
-    "ts-node": "^4.1.0"
+    "@types/jest": "^24.0.24",
+    "@types/node": "^13.1.0",
+    "husky": "^3.1.0",
+    "tslib": "^1.10.0",
+    "tsdx": "^0.12.0",
+    "typescript": "^3.7.4"
   },
   "description": "A documentation generator that understands ES modules and infers types. It is powered by the TypeScript compiler, lol.",
-  "main": "lib/generator/index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dtinth/a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler.git"
