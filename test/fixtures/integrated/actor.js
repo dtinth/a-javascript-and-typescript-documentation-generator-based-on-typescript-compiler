@@ -8,18 +8,18 @@ class Actor {
   /**
    * Creates an actor
    */
-  constructor () {
+  constructor() {
     /**
      * @type {Handle[]}
      */
-    this.stack = [ ]
+    this.stack = []
   }
 
   /**
    * Acquires a thing. The actor will announce that this actor has the thing.
    * @param {Thing} thing The thing to acquire.
    */
-  acquire (thing) {
+  acquire(thing) {
     this.say(`I have ${thing}`)
     this.stack.push(new Handle(thing.leftSide))
   }
@@ -27,7 +27,7 @@ class Actor {
   /**
    * Recalls the list of things this actor has.
    */
-  recall () {
+  recall() {
     for (const handle of this.stack) {
       this.say(`${handle}`)
     }
@@ -36,7 +36,7 @@ class Actor {
   /**
    * Combines the two last-acquired things, and announce it.
    */
-  combine () {
+  combine() {
     const rightHandle = this.stack.pop()
     const leftHandle = this.stack.pop()
     leftHandle.endingSide.connect(rightHandle.endingSide)
@@ -49,7 +49,7 @@ class Actor {
    * Say something
    * @private
    */
-  say (text) {
+  say(text) {
     console.log(text)
   }
 }
@@ -58,6 +58,6 @@ class Actor {
  * Creates an Actor
  * @return A new Actor
  */
-export default function createActor () {
+export default function createActor() {
   return new Actor()
 }

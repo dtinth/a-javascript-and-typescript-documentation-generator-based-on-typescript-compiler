@@ -142,14 +142,8 @@ JSON model is defined at [src/DataModel.ts](src/DataModel.ts).
     yarn
     ```
 
-3.  Start watching and regenerating the library file:
+3.  Run it:
 
     ```
-    yarn start
-    ```
-
-4.  Run it:
-
-    ```
-    node bin/cli src/index.ts
+    node bin/cli.development src/index.ts
     ```

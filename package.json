@@ -7,7 +7,7 @@
     "bin"
   ],
   "bin": {
-    "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler": "./bin/cli.js"
+    "a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler": "./bin/cl.production.js"
   },
   "version": "0.1.0-0",
   "scripts": {
@@ -23,16 +23,19 @@
     }
   },
   "dependencies": {
+    "@ts-morph/bootstrap": "^0.3.0",
     "commondir": "^1.0.1",
     "mkdirp": "^0.5.1",
-    "tkt": "^2.0.0"
+    "tkt": "^2.0.0",
+    "ts-morph": "^6.0.2"
   },
   "devDependencies": {
     "@types/jest": "^24.0.24",
     "@types/node": "^13.1.0",
     "husky": "^3.1.0",
-    "tslib": "^1.10.0",
+    "ts-node": "^8.5.4",
     "tsdx": "^0.12.0",
+    "tslib": "^1.10.0",
     "typescript": "^3.7.4"
   },
   "description": "A documentation generator that understands ES modules and infers types. It is powered by the TypeScript compiler, lol.",

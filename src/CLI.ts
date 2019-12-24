@@ -18,16 +18,17 @@ export function startCli() {
           desc: 'Output JSON file',
           type: 'string',
         },
-        moduleName: {
-          alias: ['n'],
-          desc: 'Name of the module',
-          default: '.',
+        debug: {
+          desc:
+            'Invoke "debugger;" before start processing docs. For use with "--inspect-brk".',
+          type: 'boolean',
         },
       },
       async args => {
         const rootFileNames = args.rootFileNames as string[]
-        const moduleName = args.moduleName as string
-        const { documentation } = generateDocs(rootFileNames, moduleName)
+        const { documentation } = generateDocs(rootFileNames, {
+          debug: args.debug,
+        })
         if (args.output) {
           fs.writeFileSync(args.output, JSON.stringify(documentation, null, 2))
         } else {

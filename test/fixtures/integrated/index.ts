@@ -4,4 +4,7 @@ export { default as createActor } from './actor'
 export { Thing } from './model'
 
 export { stuff }
-export const getName = () => require('../../package.json').name
+const answer = 42
+const id = <T>(x: T) => x
+export const getName = () => id(require('../../package.json').name)
+export { answer }
