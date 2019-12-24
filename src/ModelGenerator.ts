@@ -1,4 +1,3 @@
-import * as DataModel from './DataModel'
 import * as fs from 'fs'
 import * as path from 'path'
 import ts from 'typescript'
@@ -6,8 +5,72 @@ import ts from 'typescript'
 import { Project } from '@ts-morph/bootstrap'
 import { typeToLinkedSymbolParts } from './LinkedSymbolPartsWriter'
 
-type GenerateOptions = {
+export type GenerateOptions = {
   debug?: boolean
+}
+
+/**
+ * The result of calling `generateDocs()`.
+ */
+export interface GenerateDocsResult {
+  /**
+   * The documentation data.
+   */
+  model: Model
+  /**
+   * The `ts.Program` instance created from generating the documentation.
+   */
+  program: ts.Program
+  /**
+   * The `ts.TypeChecker` for the `program`.
+   */
+  checker: ts.TypeChecker
+}
+
+export type TypeLinkPart = string | [string, string]
+
+export type TypeInfo = {
+  parts: TypeLinkPart[]
+  flags: string[]
+  callSignatures: SignatureInfo[]
+  constructSignatures: SignatureInfo[]
+  properties?: PropertyInfo[]
+}
+
+export type PropertyInfo = { symbol: string; inherited: boolean }
+
+export type SignatureInfo = {
+  declaration?: DeclarationInfo
+  documentationComment: ts.SymbolDisplayPart[]
+  jsDocTags: ts.JSDocTagInfo[]
+  parameters: string[]
+  returnType: TypeInfo
+}
+
+export type SymbolData = {
+  name: string
+  flags: string[]
+  documentationComment: ts.SymbolDisplayPart[]
+  jsDocTags: ts.JSDocTagInfo[]
+  exports?: string[]
+  aliased?: string
+  exported?: string
+  declarations?: DeclarationInfo[]
+  type?: TypeInfo
+  static?: TypeInfo
+}
+
+export type DeclarationInfo = {
+  line: number
+  character: number
+  position: number
+  fileName: string
+  moduleSymbol?: string
+}
+
+export interface Model {
+  entryModules: string[]
+  symbolById: { [id: string]: SymbolData }
 }
 
 /**
@@ -33,10 +96,6 @@ export function generateDocs(
   const program = project.createProgram()
   const typeChecker = program.getTypeChecker()
   const languageService = project.getLanguageService()
-  const log = (text: string) => {
-    console.log(text)
-  }
-  // const walker = createWalker(program, basePath, '~')
 
   if (generateOptions.debug) {
     void languageService
@@ -46,12 +105,23 @@ export function generateDocs(
   const entryModules: string[] = []
 
   function main() {
+    const sourceFilesSet = new Set(sourceFiles)
     for (const file of sourceFiles) {
       if (!file) continue
       const moduleSymbol = typeChecker.getSymbolAtLocation(file)
       if (!moduleSymbol) continue
-      entryModules.push(getSymbolId(moduleSymbol))
-      markSymbolToBeElaborated(moduleSymbol)
+      entryModules.push(visitSymbol(moduleSymbol))
+    }
+    if (!entryModules.length) {
+      for (const ambientModule of typeChecker.getAmbientModules()) {
+        if (
+          ambientModule
+            .getDeclarations()
+            ?.some(d => sourceFilesSet.has(d.getSourceFile()))
+        ) {
+          // entryModules.push(visitSymbol(ambientModule))
+        }
+      }
     }
     while (symbolsToElaborate.size > 0) {
       const symbols = [...symbolsToElaborate]
@@ -63,19 +133,6 @@ export function generateDocs(
         }
       }
     }
-  }
-
-  type SymbolData = {
-    name: string
-    flags: string[]
-    documentationComment: ts.SymbolDisplayPart[]
-    jsDocTags: ts.JSDocTagInfo[]
-    exports?: string[]
-    aliased?: string
-    exported?: string
-    declarations?: any[]
-    type?: TypeInfo
-    static?: TypeInfo
   }
 
   let symbolsToElaborate = new Set<ts.Symbol>()
@@ -102,18 +159,11 @@ export function generateDocs(
     if (declarations) {
       symbolData.declarations = []
       for (const declaration of declarations) {
-        symbolData.declarations.push(getDeclarationInfo(declaration))
+        const info = getDeclarationInfo(declaration)
+        if (info) symbolData.declarations.push(info)
       }
     }
     return id
-  }
-
-  type DeclarationInfo = {
-    line: number
-    character: number
-    position: number
-    fileName: string
-    moduleSymbol?: string
   }
   function getDeclarationInfo(declaration: ts.Declaration) {
     if (!declaration) return
@@ -184,7 +234,14 @@ export function generateDocs(
     }
 
     if (symbolFlags & ts.SymbolFlags.TypeAlias) {
-      symbolData.type = getBriefTypeInfo(declaredType)
+      const declarationType =
+        firstlyDeclared &&
+        ts.isTypeAliasDeclaration(firstlyDeclared) &&
+        firstlyDeclared.type
+      symbolData.type =
+        declarationType && ts.isTypeLiteralNode(declarationType)
+          ? getElaboratedTypeInfo(declaredType, symbol)
+          : getBriefTypeInfo(declaredType)
     }
 
     if (symbolFlags & ts.SymbolFlags.Variable && symbolType) {
@@ -209,7 +266,6 @@ export function generateDocs(
     }
   }
 
-  type TypeInfo = any
   function getBriefTypeInfo(type: ts.Type): TypeInfo {
     const callSignatures = typeChecker.getSignaturesOfType(
       type,
@@ -304,40 +360,9 @@ export function generateDocs(
 
   main()
 
-  // for (const file of sourceFiles) {
-  //   if (!file) continue
-  //   const moduleSymbol = typeChecker.getSymbolAtLocation(file)
-  //   if (!moduleSymbol) continue
-  //   readModule(moduleSymbol)
-  // }
-  // if (!walker.getState().publicModules.length) {
-  //   for (const ambientModule of typeChecker.getAmbientModules()) {
-  //     readModule(ambientModule)
-  //   }
-  // }
-
   return {
-    // documentation: walker.getState(),
-    documentation: { symbols } as any,
+    model: { symbols },
     program,
     checker: typeChecker,
   }
-}
-
-/**
- * The result of calling `generateDocs()`.
- */
-export interface GenerateDocsResult {
-  /**
-   * The documentation data.
-   */
-  documentation: DataModel.Documentation
-  /**
-   * The `ts.Program` instance created from generating the documentation.
-   */
-  program: ts.Program
-  /**
-   * The `ts.TypeChecker` for the `program`.
-   */
-  checker: ts.TypeChecker
 }

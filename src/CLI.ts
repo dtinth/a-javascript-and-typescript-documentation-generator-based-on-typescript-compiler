@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as tkt from 'tkt'
-import { generateDocs } from './DocumentationGenerator'
+import { generateDocs } from './ModelGenerator'
 
 export function startCli() {
   return tkt
@@ -26,13 +26,13 @@ export function startCli() {
       },
       async args => {
         const rootFileNames = args.rootFileNames as string[]
-        const { documentation } = generateDocs(rootFileNames, {
+        const { model } = generateDocs(rootFileNames, {
           debug: args.debug,
         })
         if (args.output) {
-          fs.writeFileSync(args.output, JSON.stringify(documentation, null, 2))
+          fs.writeFileSync(args.output, JSON.stringify(model, null, 2))
         } else {
-          console.log(JSON.stringify(documentation, null, 2))
+          console.log(JSON.stringify(model, null, 2))
         }
       },
     )

@@ -1,5 +1,2 @@
-import * as DataModel from './DataModel'
-
-export { DataModel }
-export { generateDocs, GenerateDocsResult } from './DocumentationGenerator'
+export { generateDocs, GenerateDocsResult } from './ModelGenerator'
 export { startCli } from './CLI'
