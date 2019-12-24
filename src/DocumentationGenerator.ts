@@ -4,6 +4,7 @@ import * as path from 'path'
 import ts from 'typescript'
 // import { createWalker } from './ProgramWalker'
 import { Project } from '@ts-morph/bootstrap'
+import { typeToLinkedSymbolParts } from './LinkedSymbolPartsWriter'
 
 type GenerateOptions = {
   debug?: boolean
@@ -219,7 +220,9 @@ export function generateDocs(
       ts.SignatureKind.Construct,
     )
     return {
-      stringified: typeChecker.typeToString(type),
+      parts: typeToLinkedSymbolParts(typeChecker, type).map(x =>
+        x.symbol ? [getSymbolId(x.symbol), x.text] : x.text,
+      ),
       flags: getTypeFlags(type),
       callSignatures: callSignatures.map(getSignatureInfo),
       constructSignatures: constructSignatures.map(getSignatureInfo),
