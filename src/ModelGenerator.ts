@@ -37,23 +37,23 @@ export type TypeInfo = {
   properties?: PropertyInfo[]
 }
 
-export type PropertyInfo = { symbol: string; inherited: boolean }
+export type PropertyInfo = { name: string; symbol: string; inherited: boolean }
 
 export type SignatureInfo = {
   declaration?: DeclarationInfo
   documentationComment: ts.SymbolDisplayPart[]
   jsDocTags: ts.JSDocTagInfo[]
-  parameters: string[]
+  parameters: NamedSymbolInfo[]
   returnType: TypeInfo
 }
 
 export type SymbolData = {
+  id: string
   name: string
   flags: string[]
   documentationComment: ts.SymbolDisplayPart[]
   jsDocTags: ts.JSDocTagInfo[]
-  exports?: string[]
-  aliased?: string
+  exports?: NamedSymbolInfo[]
   exported?: string
   declarations?: DeclarationInfo[]
   type?: TypeInfo
@@ -68,9 +68,14 @@ export type DeclarationInfo = {
   moduleSymbol?: string
 }
 
+export type NamedSymbolInfo = {
+  name: string
+  symbol: string
+}
+
 export interface Model {
   entryModules: string[]
-  symbolById: { [id: string]: SymbolData }
+  symbols: SymbolData[]
 }
 
 /**
@@ -142,12 +147,17 @@ export function generateDocs(
   let nextSymbolId = 1
 
   function getSymbolId(symbol: ts.Symbol): string {
+    if (symbol.getFlags() & ts.SymbolFlags.Alias) {
+      const aliasedSymbol = typeChecker.getAliasedSymbol(symbol)
+      return getSymbolId(aliasedSymbol)
+    }
     const existingId = symbolToIdMap.get(symbol)
     if (existingId) return existingId
     const name = symbol.getName()
     const id = `${nextSymbolId++}_${name}`
     symbolToIdMap.set(symbol, id)
     const symbolData: SymbolData = {
+      id,
       name: name,
       flags: getSymbolFlags(symbol),
       documentationComment: symbol.getDocumentationComment(typeChecker),
@@ -183,25 +193,19 @@ export function generateDocs(
     return declaredAt
   }
 
-  function visitSymbol(symbol: ts.Symbol) {
-    const id = getSymbolId(symbol)
-    const symbolData = symbols[id]
+  function visitSymbol(symbol: ts.Symbol): string {
     if (symbol.getFlags() & ts.SymbolFlags.Alias) {
       const aliasedSymbol = typeChecker.getAliasedSymbol(symbol)
-      if (aliasedSymbol !== symbol) {
-        symbolData.aliased = visitSymbol(aliasedSymbol)
-      }
+      return visitSymbol(aliasedSymbol)
     }
+    const id = getSymbolId(symbol)
+    const symbolData = symbols[id]
     const exportedSymbol = typeChecker.getExportSymbolOfSymbol(symbol)
     if (exportedSymbol !== symbol) {
       symbolData.exported = visitSymbol(exportedSymbol)
     }
-    markSymbolToBeElaborated(symbol)
-    return id
-  }
-
-  function markSymbolToBeElaborated(symbol: ts.Symbol) {
     symbolsToElaborate.add(symbol)
+    return id
   }
 
   function elaborateOnSymbol(symbol: ts.Symbol) {
@@ -227,10 +231,7 @@ export function generateDocs(
     const symbolFlags = symbol.getFlags()
     if (symbolFlags & ts.SymbolFlags.Module) {
       const exported = typeChecker.getExportsOfModule(symbol)
-      symbolData.exports = []
-      for (const exportSymbol of exported) {
-        symbolData.exports.push(visitSymbol(exportSymbol))
-      }
+      symbolData.exports = exported.map(visitNamedSymbol)
     }
 
     if (symbolFlags & ts.SymbolFlags.TypeAlias) {
@@ -309,6 +310,7 @@ export function generateDocs(
           }
         }
         return {
+          name: property.getName(),
           symbol: visitSymbol(property),
           inherited,
         }
@@ -316,15 +318,18 @@ export function generateDocs(
     }
   }
 
-  function getSignatureInfo(signature: ts.Signature) {
+  function getSignatureInfo(signature: ts.Signature): SignatureInfo {
     return {
       declaration: getDeclarationInfo(signature.getDeclaration()),
       documentationComment: signature.getDocumentationComment(typeChecker),
       jsDocTags: signature.getJsDocTags(),
-      parameters: signature.getParameters().map(visitSymbol),
+      parameters: signature.getParameters().map(visitNamedSymbol),
       returnType: getBriefTypeInfo(signature.getReturnType()),
       // TODO: getTypeParameters
     }
+  }
+  function visitNamedSymbol(symbol: ts.Symbol): NamedSymbolInfo {
+    return { name: symbol.getName(), symbol: visitSymbol(symbol) }
   }
 
   function getSymbolFlags(symbol: ts.Symbol): string[] {
@@ -361,7 +366,10 @@ export function generateDocs(
   main()
 
   return {
-    model: { symbols },
+    model: {
+      entryModules,
+      symbols: Object.values(symbols),
+    },
     program,
     checker: typeChecker,
   }
