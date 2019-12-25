@@ -198,7 +198,6 @@ export function generateDocs(
       return visitSymbol(aliasedSymbol)
     }
     const id = getSymbolId(symbol)
-    const symbolData = symbols[id]
     symbolsToElaborate.add(symbol)
     return id
   }
