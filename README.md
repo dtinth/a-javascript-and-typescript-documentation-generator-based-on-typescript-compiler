@@ -12,15 +12,16 @@ This means it understands modules that re-exports things like this:
 
 ```js
 // index.ts
-import * as doc from './doc'
+import * as Model from './Model'
 
-export { doc }
-export { default as generateDocs, GenerateDocsResult } from './generateDocs'
+export { Model }
+export { generateDocs, GenerateDocsResult } from './ModelGenerator'
+export { startCli } from './CLI'
 ```
 
 And generates a documentation like this:
 
-![Generated docs](docs/images/example-re-export.png)
+> TODO: ADD IMAGE
 
 It also works with JavaScript file. In this case, [TypeScript compiler reads the type annotation from JSDoc tags](https://github.com/Microsoft/TypeScript/wiki/JSDoc-support-in-JavaScript).
 
@@ -40,7 +41,7 @@ export function calculateAccuracy(count, total) {
 Which generates a documentation like this
 (note: the return type is inferred by the compiler):
 
-![Generated docs](docs/images/example-js.png)
+> TODO: ADD IMAGE
 
 <p align="center">
   :construction: :construction: :construction:
