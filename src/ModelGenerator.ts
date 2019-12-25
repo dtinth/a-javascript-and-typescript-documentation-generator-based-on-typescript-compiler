@@ -32,8 +32,8 @@ export type TypeLinkPart = string | [string, string]
 export type TypeInfo = {
   parts: TypeLinkPart[]
   flags: string[]
-  callSignatures: SignatureInfo[]
-  constructSignatures: SignatureInfo[]
+  callSignatures?: SignatureInfo[]
+  constructSignatures?: SignatureInfo[]
   properties?: PropertyInfo[]
 }
 
@@ -54,7 +54,6 @@ export type SymbolData = {
   documentationComment: ts.SymbolDisplayPart[]
   jsDocTags: ts.JSDocTagInfo[]
   exports?: NamedSymbolInfo[]
-  exported?: string
   declarations?: DeclarationInfo[]
   type?: TypeInfo
   static?: TypeInfo
@@ -200,10 +199,6 @@ export function generateDocs(
     }
     const id = getSymbolId(symbol)
     const symbolData = symbols[id]
-    const exportedSymbol = typeChecker.getExportSymbolOfSymbol(symbol)
-    if (exportedSymbol !== symbol) {
-      symbolData.exported = visitSymbol(exportedSymbol)
-    }
     symbolsToElaborate.add(symbol)
     return id
   }
@@ -268,21 +263,23 @@ export function generateDocs(
   }
 
   function getBriefTypeInfo(type: ts.Type): TypeInfo {
-    const callSignatures = typeChecker.getSignaturesOfType(
-      type,
-      ts.SignatureKind.Call,
-    )
-    const constructSignatures = typeChecker.getSignaturesOfType(
-      type,
-      ts.SignatureKind.Construct,
-    )
     return {
-      parts: typeToLinkedSymbolParts(typeChecker, type).map(x =>
-        x.symbol ? [getSymbolId(x.symbol), x.text] : x.text,
+      parts: protectFromFailure(
+        () =>
+          typeToLinkedSymbolParts(typeChecker, type).map(x =>
+            x.symbol ? [getSymbolId(x.symbol), x.text] : x.text,
+          ),
+        e => [`Failed to generate parts: ${e}`],
       ),
       flags: getTypeFlags(type),
-      callSignatures: callSignatures.map(getSignatureInfo),
-      constructSignatures: constructSignatures.map(getSignatureInfo),
+    }
+  }
+
+  function protectFromFailure<T>(f: () => T, fallback: (e: Error) => T) {
+    try {
+      return f()
+    } catch (e) {
+      return fallback(e)
     }
   }
 
@@ -294,8 +291,18 @@ export function generateDocs(
       parentSymbol.getDeclarations() || [],
     )
     const properties = typeChecker.getPropertiesOfType(type)
+    const callSignatures = typeChecker.getSignaturesOfType(
+      type,
+      ts.SignatureKind.Call,
+    )
+    const constructSignatures = typeChecker.getSignaturesOfType(
+      type,
+      ts.SignatureKind.Construct,
+    )
     return {
       ...getBriefTypeInfo(type),
+      callSignatures: callSignatures.map(getSignatureInfo),
+      constructSignatures: constructSignatures.map(getSignatureInfo),
       properties: properties.map(property => {
         const declaration = property.getDeclarations()?.[0]
         let inherited = true
@@ -364,6 +371,12 @@ export function generateDocs(
   }
 
   main()
+  console.log(
+    `Symbol stats: ` +
+      `${program.getSymbolCount()} total, ` +
+      `${Object.keys(symbols).length} read, ` +
+      `${elaboratedSymbols.size} elaborated`,
+  )
 
   return {
     model: {
