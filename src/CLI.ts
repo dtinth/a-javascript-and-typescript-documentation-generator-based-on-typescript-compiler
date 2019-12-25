@@ -2,6 +2,9 @@ import * as fs from 'fs'
 import * as tkt from 'tkt'
 import { generateDocs } from './ModelGenerator'
 
+/**
+ * Runs the CLI.
+ */
 export function startCli() {
   return tkt
     .cli()
