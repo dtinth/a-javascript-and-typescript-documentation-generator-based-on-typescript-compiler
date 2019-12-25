@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: ~/src
     docker:
-      - image: circleci/node:8-browsers
+      - image: circleci/node:12
     steps:
       - checkout
       - restore_cache:
@@ -19,14 +19,48 @@ jobs:
           name: build
           command: yarn build
       - run:
-          name: generate html
-          command: yarn generate test/fixture/index.ts --html /tmp/result
+          name: generate result folder
+          command: mkdir -p /tmp/result
       - run:
-          name: generate json
-          command: yarn generate test/fixture/index.ts --json /tmp/result/documentation.json
+          name: generate example - class
+          command: node bin/cli.production test/fixtures/class/index.ts -o /tmp/result/fixture-class.json
+          when: always
       - run:
-          name: generate screenshot
-          command: google-chrome --headless --disable-gpu --screenshot=/tmp/result/screenshot.png --window-size=1280,1696 /tmp/result/index.html
+          name: generate example - functions
+          command: node bin/cli.production test/fixtures/functions/index.ts -o /tmp/result/fixture-functions.json
+          when: always
+      - run:
+          name: generate example - generics
+          command: node bin/cli.production test/fixtures/generics/index.ts -o /tmp/result/fixture-generics.json
+          when: always
+      - run:
+          name: generate example - multiple-declarations
+          command: node bin/cli.production test/fixtures/multiple-declarations/index.ts -o /tmp/result/fixture-multiple-declarations.json
+          when: always
+      - run:
+          name: generate example - namespace
+          command: node bin/cli.production test/fixtures/namespace/index.ts -o /tmp/result/fixture-namespace.json
+          when: always
+      - run:
+          name: generate example - object
+          command: node bin/cli.production test/fixtures/object/index.ts -o /tmp/result/fixture-object.json
+          when: always
+      - run:
+          name: generate example - type-alias
+          command: node bin/cli.production test/fixtures/type-alias/index.ts -o /tmp/result/fixture-type-alias.json
+          when: always
+      - run:
+          name: generate example - integrated
+          command: node bin/cli.production test/fixtures/integrated/index.ts -o /tmp/result/fixture-integrated.json
+          when: always
+      - run:
+          name: generate example - self
+          command: node bin/cli.production src/index.ts -o /tmp/result/self.json
+          when: always
+      - run:
+          name: generate example - redux
+          command: node bin/cli.production node_modules/redux/index.d.ts -o /tmp/result/redux.json
+          when: always
       - store_artifacts:
           path: /tmp/result
           prefix: result

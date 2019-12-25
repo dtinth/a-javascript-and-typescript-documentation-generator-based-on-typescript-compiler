@@ -1,5 +1,0 @@
-export const BASE = '#D3D0C7'
-export const SHADOW_1 = '#848284'
-export const SHADOW_2 = '#424142'
-export const HIGHLIGHT_1 = '#D3D0C7'
-export const HIGHLIGHT_2 = '#FFF'
