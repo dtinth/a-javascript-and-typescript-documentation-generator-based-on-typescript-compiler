@@ -4,6 +4,14 @@ import ts from 'typescript'
 // import { createWalker } from './ProgramWalker'
 import { Project } from '@ts-morph/bootstrap'
 import { typeToLinkedSymbolParts } from './LinkedSymbolPartsWriter'
+import {
+  Model,
+  SymbolData,
+  DeclarationInfo,
+  TypeInfo,
+  SignatureInfo,
+  NamedSymbolInfo,
+} from './Model'
 
 export type GenerateOptions = {
   debug?: boolean
@@ -25,56 +33,6 @@ export interface GenerateDocsResult {
    * The `ts.TypeChecker` for the `program`.
    */
   checker: ts.TypeChecker
-}
-
-export type TypeLinkPart = string | [string, string]
-
-export type TypeInfo = {
-  parts: TypeLinkPart[]
-  flags: string[]
-  callSignatures?: SignatureInfo[]
-  constructSignatures?: SignatureInfo[]
-  properties?: PropertyInfo[]
-}
-
-export type PropertyInfo = { name: string; symbol: string; inherited: boolean }
-
-export type SignatureInfo = {
-  declaration?: DeclarationInfo
-  documentationComment: ts.SymbolDisplayPart[]
-  jsDocTags: ts.JSDocTagInfo[]
-  parameters: NamedSymbolInfo[]
-  returnType: TypeInfo
-}
-
-export type SymbolData = {
-  id: string
-  name: string
-  flags: string[]
-  documentationComment: ts.SymbolDisplayPart[]
-  jsDocTags: ts.JSDocTagInfo[]
-  exports?: NamedSymbolInfo[]
-  declarations?: DeclarationInfo[]
-  type?: TypeInfo
-  static?: TypeInfo
-}
-
-export type DeclarationInfo = {
-  line: number
-  character: number
-  position: number
-  fileName: string
-  moduleSymbol?: string
-}
-
-export type NamedSymbolInfo = {
-  name: string
-  symbol: string
-}
-
-export interface Model {
-  entryModules: string[]
-  symbols: SymbolData[]
 }
 
 /**
