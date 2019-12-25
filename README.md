@@ -112,6 +112,7 @@ Which generates a documentation like this
 
 - a-javascript-and-typescript-documentation-generator-based-on-typescript-compiler
   goes through the modules, and collect documentation data, into a JSON-serializable model.
+  This model is **extremely verbose** and needs to be post-processed to generate a usable documentation.
 
 ## Usage
 
