@@ -9,9 +9,22 @@ export interface Model {
    */
   entryModules: string[]
   /**
+   * Source file IDs for the specified entry files.
+   */
+  entrySourceFiles: string[]
+  /**
+   * Collected source files
+   */
+  sourceFiles: SourceFileData[]
+  /**
    * The collected symbol.
    */
   symbols: SymbolData[]
+}
+
+export interface SourceFileData {
+  id: string
+  fileName: string
 }
 
 export interface SymbolData {
@@ -89,6 +102,5 @@ export interface DeclarationInfo {
   line: number
   character: number
   position: number
-  fileName: string
-  moduleSymbol?: string
+  sourceFile: string
 }

@@ -11,6 +11,7 @@ import {
   TypeInfo,
   SignatureInfo,
   NamedSymbolInfo,
+  SourceFileData,
 } from './Model'
 
 export type GenerateOptions = {
@@ -54,7 +55,7 @@ export function generateDocs(
   const project = new Project({
     compilerOptions: options,
   })
-  const sourceFiles = project.addSourceFilesByPaths(rootFileNames)
+  const entrySourceFiles = project.addSourceFilesByPaths(rootFileNames)
   const program = project.createProgram()
   const typeChecker = program.getTypeChecker()
   const languageService = project.getLanguageService()
@@ -64,24 +65,26 @@ export function generateDocs(
     debugger
   }
 
-  const entryModules: string[] = []
+  const entryModuleSymbolIds: string[] = []
+  const entrySourceFileIds: string[] = []
 
   function main() {
-    const sourceFilesSet = new Set(sourceFiles)
-    for (const file of sourceFiles) {
+    const sourceFilesSet = new Set(entrySourceFiles)
+    for (const file of entrySourceFiles) {
       if (!file) continue
+      entrySourceFileIds.push(getSourceFileId(file))
       const moduleSymbol = typeChecker.getSymbolAtLocation(file)
       if (!moduleSymbol) continue
-      entryModules.push(visitSymbol(moduleSymbol))
+      entryModuleSymbolIds.push(visitSymbol(moduleSymbol))
     }
-    if (!entryModules.length) {
+    if (!entryModuleSymbolIds.length) {
       for (const ambientModule of typeChecker.getAmbientModules()) {
         if (
           ambientModule
             .getDeclarations()
             ?.some(d => sourceFilesSet.has(d.getSourceFile()))
         ) {
-          // entryModules.push(visitSymbol(ambientModule))
+          entryModuleSymbolIds.push(visitSymbol(ambientModule))
         }
       }
     }
@@ -100,8 +103,25 @@ export function generateDocs(
   let symbolsToElaborate = new Set<ts.Symbol>()
   const elaboratedSymbols = new Set<ts.Symbol>()
   const symbolToIdMap = new Map<ts.Symbol, string>()
-  const symbols: { [id: string]: SymbolData } = {}
+  const symbolDataById: { [id: string]: SymbolData } = {}
   let nextSymbolId = 1
+
+  const sourceFileToIdMap = new Map<ts.SourceFile, string>()
+  const sourceFileDataById: { [id: string]: SourceFileData } = {}
+  let nextSourceFileId = 1
+
+  function getSourceFileId(sourceFile: ts.SourceFile): string {
+    const existingId = sourceFileToIdMap.get(sourceFile)
+    if (existingId) return existingId
+    const id = `${nextSourceFileId++}`
+    sourceFileToIdMap.set(sourceFile, id)
+    const sourceFileData: SourceFileData = {
+      id,
+      fileName: sourceFile.fileName,
+    }
+    sourceFileDataById[id] = sourceFileData
+    return id
+  }
 
   function getSymbolId(symbol: ts.Symbol): string {
     if (symbol.getFlags() & ts.SymbolFlags.Alias) {
@@ -120,7 +140,7 @@ export function generateDocs(
       documentationComment: symbol.getDocumentationComment(typeChecker),
       jsDocTags: symbol.getJsDocTags(),
     }
-    symbols[id] = symbolData
+    symbolDataById[id] = symbolData
     console.log('Reading', id, `[${symbolData.flags}]`)
     const declarations = symbol.getDeclarations()
     if (declarations) {
@@ -141,11 +161,7 @@ export function generateDocs(
       line: start.line,
       character: start.character,
       position: startPosition,
-      fileName: sourceFile.fileName,
-    }
-    const moduleSymbol = typeChecker.getSymbolAtLocation(sourceFile)
-    if (moduleSymbol) {
-      declaredAt.moduleSymbol = getSymbolId(moduleSymbol)
+      sourceFile: getSourceFileId(sourceFile),
     }
     return declaredAt
   }
@@ -162,7 +178,7 @@ export function generateDocs(
 
   function elaborateOnSymbol(symbol: ts.Symbol) {
     const id = getSymbolId(symbol)
-    const symbolData = symbols[id]
+    const symbolData = symbolDataById[id]
     console.log('Elaborating', id)
 
     const declaredType = typeChecker.getDeclaredTypeOfSymbol(symbol)
@@ -331,14 +347,16 @@ export function generateDocs(
   console.log(
     `Symbol stats: ` +
       `${program.getSymbolCount()} total, ` +
-      `${Object.keys(symbols).length} read, ` +
+      `${Object.keys(symbolDataById).length} read, ` +
       `${elaboratedSymbols.size} elaborated`,
   )
 
   return {
     model: {
-      entryModules,
-      symbols: Object.values(symbols),
+      entryModules: entryModuleSymbolIds,
+      entrySourceFiles: entrySourceFileIds,
+      symbols: Object.values(symbolDataById),
+      sourceFiles: Object.values(sourceFileDataById),
     },
     program,
     checker: typeChecker,
