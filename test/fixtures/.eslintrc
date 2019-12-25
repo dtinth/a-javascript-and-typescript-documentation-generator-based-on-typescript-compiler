@@ -1,0 +1,4 @@
+rules:
+  no-new-func: off
+  no-redeclare: off
+  '@typescript-eslint/no-namespace': off
