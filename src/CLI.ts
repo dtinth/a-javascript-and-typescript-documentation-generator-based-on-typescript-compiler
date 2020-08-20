@@ -27,9 +27,9 @@ export function startCli() {
           type: 'boolean',
         },
       },
-      async args => {
+      async (args) => {
         const rootFileNames = args.rootFileNames as string[]
-        const { model } = generateDocs(rootFileNames, {
+        const { model } = await generateDocs(rootFileNames, {
           debug: args.debug,
         })
         if (args.output) {

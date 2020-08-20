@@ -11,36 +11,32 @@
   },
   "version": "0.1.0-0",
   "scripts": {
-    "start": "tsdx watch --target=node",
-    "build": "tsdx build --target=node",
-    "test": "tsdx test",
-    "lint": "tsdx lint",
-    "prepare": "tsdx build --target=node"
+    "test": "jest",
+    "prepare": "tsc"
   },
   "husky": {
     "hooks": {
-      "pre-commit": "tsdx lint"
+      "pre-commit": "pretty-quick --staged"
     }
   },
   "dependencies": {
-    "@ts-morph/bootstrap": "^0.3.0",
+    "@ts-morph/bootstrap": "^0.5.2",
     "commondir": "^1.0.1",
     "mkdirp": "^0.5.1",
     "tkt": "^2.0.0",
-    "ts-morph": "^6.0.2"
+    "ts-morph": "^7.3.0"
   },
   "devDependencies": {
-    "@reduxjs/toolkit": "^1.1.0",
-    "@types/jest": "^24.0.24",
-    "@types/lodash": "^4.14.149",
+    "@types/jest": "^26.0.10",
     "@types/node": "^13.1.0",
-    "@types/react": "^16.9.17",
     "husky": "^3.1.0",
-    "redux": "^4.0.5",
-    "ts-node": "^8.5.4",
-    "tsdx": "^0.12.0",
+    "jest": "^26.4.1",
+    "prettier": "^2.0.5",
+    "pretty-quick": "^2.0.1",
+    "ts-jest": "^26.2.0",
+    "ts-node": "^8.10.2",
     "tslib": "^1.10.0",
-    "typescript": "^3.7.4"
+    "typescript": "3.9"
   },
   "description": "A documentation generator that understands ES modules and infers types. It is powered by the TypeScript compiler, lol.",
   "repository": {

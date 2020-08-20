@@ -1,8 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import ts from 'typescript'
-// import { createWalker } from './ProgramWalker'
-import { Project } from '@ts-morph/bootstrap'
+import { createProject } from '@ts-morph/bootstrap'
 import { typeToLinkedSymbolParts } from './LinkedSymbolPartsWriter'
 import {
   Model,
@@ -41,21 +40,23 @@ export interface GenerateDocsResult {
  *
  * @param rootFilename An array representing filepaths of public modules.
  */
-export function generateDocs(
+export async function generateDocs(
   rootFileNames: string[],
   generateOptions: GenerateOptions = {},
-): GenerateDocsResult {
-  rootFileNames = rootFileNames.map(n => fs.realpathSync(n))
-  const basePath = require('commondir')(rootFileNames.map(f => path.dirname(f)))
+): Promise<GenerateDocsResult> {
+  rootFileNames = rootFileNames.map((n) => fs.realpathSync(n))
+  const basePath = require('commondir')(
+    rootFileNames.map((f) => path.dirname(f)),
+  )
 
   const { options } = ts.convertCompilerOptionsFromJson(
     { allowJs: true },
     basePath,
   )
-  const project = new Project({
+  const project = await createProject({
     compilerOptions: options,
   })
-  const entrySourceFiles = project.addSourceFilesByPaths(rootFileNames)
+  const entrySourceFiles = await project.addSourceFilesByPaths(rootFileNames)
   const program = project.createProgram()
   const typeChecker = program.getTypeChecker()
   const languageService = project.getLanguageService()
@@ -82,7 +83,7 @@ export function generateDocs(
         if (
           ambientModule
             .getDeclarations()
-            ?.some(d => sourceFilesSet.has(d.getSourceFile()))
+            ?.some((d) => sourceFilesSet.has(d.getSourceFile()))
         ) {
           entryModuleSymbolIds.push(visitSymbol(ambientModule))
         }
@@ -239,10 +240,10 @@ export function generateDocs(
     return {
       parts: protectFromFailure(
         () =>
-          typeToLinkedSymbolParts(typeChecker, type).map(x =>
+          typeToLinkedSymbolParts(typeChecker, type).map((x) =>
             x.symbol ? [getSymbolId(x.symbol), x.text] : x.text,
           ),
-        e => [`Failed to generate parts: ${e}`],
+        (e) => [`Failed to generate parts: ${e}`],
       ),
       flags: getTypeFlags(type),
     }
@@ -276,7 +277,7 @@ export function generateDocs(
       ...getBriefTypeInfo(type),
       callSignatures: callSignatures.map(getSignatureInfo),
       constructSignatures: constructSignatures.map(getSignatureInfo),
-      properties: properties.map(property => {
+      properties: properties.map((property) => {
         const declaration = property.getDeclarations()?.[0]
         let inherited = true
         for (
