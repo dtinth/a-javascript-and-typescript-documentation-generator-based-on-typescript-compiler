@@ -16,8 +16,8 @@ jobs:
           paths:
             - ./node_modules
       - run:
-          name: build
-          command: yarn build
+          name: prepare
+          command: yarn prepare
       - run:
           name: generate result folder
           command: mkdir -p /tmp/result
@@ -56,10 +56,6 @@ jobs:
       - run:
           name: generate example - self
           command: node bin/cli.production src/index.ts -o /tmp/result/self.json
-          when: always
-      - run:
-          name: generate example - redux
-          command: node bin/cli.production node_modules/redux/index.d.ts -o /tmp/result/redux.json
           when: always
       - store_artifacts:
           path: /tmp/result

@@ -1,13 +1,13 @@
 {
-  "include": ["src", "types", "test"],
+  "include": ["src"],
   "compilerOptions": {
     "target": "es6",
-    "module": "esnext",
+    "module": "commonjs",
     "lib": ["dom", "esnext"],
     "importHelpers": true,
     "declaration": true,
     "sourceMap": true,
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -20,10 +20,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
-    "baseUrl": "./",
-    "paths": {
-      "*": ["src/*", "node_modules/*"]
-    },
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "lib"
   }
 }
