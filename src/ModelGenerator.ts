@@ -157,9 +157,17 @@ export async function generateDocs(
     const root = new DocPage(DocPageKind.Root, null, '(root)')
     const elaborationQueue = new Set<DocEntry<ts.Symbol>>()
     const symbolPageMap = new Map<ts.Symbol, DocPage>()
+    const symbolEntryMap = new Map<ts.Symbol, DocEntry<any>>()
 
-    const enqueue = (entry: DocEntry<ts.Symbol>) => {
+    const enqueue: EnqueueFn = (entry) => {
       elaborationQueue.add(entry)
+      return entry
+    }
+    const associate: AssociateFn = (entry, symbol) => {
+      if (!symbolEntryMap.has(symbol)) {
+        symbolEntryMap.set(symbol, entry)
+      }
+      return entry
     }
 
     // Enqueue modules that are source files.
@@ -167,14 +175,22 @@ export async function generateDocs(
       if (!sourceFile) continue
       const moduleSymbol = checker.getSymbolAtLocation(sourceFile)
       if (!moduleSymbol) continue
-      enqueue(root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol))
+      enqueue(
+        associate(
+          root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol),
+          moduleSymbol,
+        ),
+      )
     }
 
     // Enqueue ambient modules declared inside the entry source files
     for (const moduleSymbol of checker.getAmbientModules()) {
       if (isDeclaredInsideEntryFile(moduleSymbol)) {
         enqueue(
-          root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol),
+          associate(
+            root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol),
+            moduleSymbol,
+          ),
         )
       }
     }
@@ -191,7 +207,7 @@ export async function generateDocs(
       if (isDeclaredInsideEntryFile(globalSymbol)) {
         const classification = classifier.classifySymbol(globalSymbol)
         if (!globalNamespacePage) {
-          const entry = root.globals.addEntry('(globals)', globalNamespacePage)
+          const entry = root.globals.addEntry('(globals)', null)
           globalNamespacePage = new DocPage(
             DocPageKind.Namespace,
             entry,
@@ -199,7 +215,12 @@ export async function generateDocs(
           )
           entry.target = globalNamespacePage
         }
-        classification.addToPage?.(globalNamespacePage, globalSymbol, enqueue)
+        classification.addToPage?.(
+          globalNamespacePage,
+          globalSymbol,
+          enqueue,
+          associate,
+        )
       }
     }
 
@@ -235,7 +256,7 @@ export async function generateDocs(
       if (!page) {
         page = new DocPage(kind, entry, name)
         symbolPageMap.set(symbol, page)
-        classification.populatePage?.(page, enqueue)
+        classification.populatePage?.(page, enqueue, associate)
       }
     }
   }
@@ -305,11 +326,17 @@ export async function generateDocs(
       page: DocPage,
       sourceSymbol: ts.Symbol,
       enqueuePage: EnqueueFn,
+      associateSymbolWithEntry: AssociateFn,
     ) => void
-    populatePage?: (page: DocPage, enqueuePage: EnqueueFn) => void
+    populatePage?: (
+      page: DocPage,
+      enqueuePage: EnqueueFn,
+      associateSymbolWithEntry: AssociateFn,
+    ) => void
   }
 
-  type EnqueueFn = (entry: DocEntry<ts.Symbol>) => void
+  type EnqueueFn = (entry: DocEntry<ts.Symbol>) => DocEntry<ts.Symbol>
+  type AssociateFn = <T>(entry: DocEntry<T>, symbol: ts.Symbol) => DocEntry<T>
 
   function createClassifier() {
     const typeEntryMap = new Map<ts.Type, DocEntry<ts.Symbol>>()
@@ -343,8 +370,13 @@ export async function generateDocs(
         ) {
           return {
             description: 'Interface',
-            addToPage: (page, originSymbol, enqueue) => {
-              enqueue(page.types.addEntry(getSymbolName(originSymbol), symbol))
+            addToPage: (page, originSymbol, enqueue, associate) => {
+              enqueue(
+                associate(
+                  page.types.addEntry(getSymbolName(originSymbol), symbol),
+                  originSymbol,
+                ),
+              )
             },
             newPageOptions: createPageOptions(DocPageKind.Interface),
             populatePage: populateInterfacePage,
@@ -352,8 +384,11 @@ export async function generateDocs(
         } else {
           return {
             description: 'Type Alias',
-            addToPage: (page, originSymbol) => {
-              page.types.addEntry(getSymbolName(originSymbol), symbol)
+            addToPage: (page, originSymbol, _enqueue, associate) => {
+              associate(
+                page.types.addEntry(getSymbolName(originSymbol), symbol),
+                originSymbol,
+              )
             },
           }
         }
@@ -369,8 +404,14 @@ export async function generateDocs(
         const classification = classifySymbol(targetSymbol)
         return {
           description: classification.description,
-          addToPage: (page, originSymbol) => {
-            page.properties.addEntry(getSymbolName(originSymbol), targetSymbol)
+          addToPage: (page, originSymbol, _enqueue, associate) => {
+            associate(
+              page.properties.addEntry(
+                getSymbolName(originSymbol),
+                targetSymbol,
+              ),
+              originSymbol,
+            )
           },
           // Do not populate new pages
         }
@@ -406,13 +447,16 @@ export async function generateDocs(
               : DocPageKind.Namespace,
           ),
           populatePage: populateValuePage,
-          addToPage: (page, originSymbol, enqueue) => {
+          addToPage: (page, originSymbol, enqueue, associate) => {
             const category = constructable
               ? page.classes
               : callable
               ? page.properties
               : page.namespaces
-            const entry = category.addEntry(getSymbolName(originSymbol), symbol)
+            const entry = associate(
+              category.addEntry(getSymbolName(originSymbol), symbol),
+              originSymbol,
+            )
             typeEntryMap.set(type, entry)
 
             const instanceType =
@@ -436,15 +480,21 @@ export async function generateDocs(
       } else if (typeIsObject && callSignatures.length > 0) {
         return {
           description: 'Function',
-          addToPage: (page, originSymbol) => {
-            page.properties.addEntry(getSymbolName(originSymbol), symbol)
+          addToPage: (page, originSymbol, _enqueue, associate) => {
+            associate(
+              page.properties.addEntry(getSymbolName(originSymbol), symbol),
+              originSymbol,
+            )
           },
         }
       } else {
         return {
           description: 'Member',
-          addToPage: (page, originSymbol) => {
-            page.properties.addEntry(getSymbolName(originSymbol), symbol)
+          addToPage: (page, originSymbol, _enqueue, associate) => {
+            associate(
+              page.properties.addEntry(getSymbolName(originSymbol), symbol),
+              originSymbol,
+            )
           },
         }
       }
@@ -453,16 +503,24 @@ export async function generateDocs(
         return { kind, name: getSymbolName(symbol) }
       }
 
-      function populateValuePage(page: DocPage, enqueue: EnqueueFn) {
+      function populateValuePage(
+        page: DocPage,
+        enqueue: EnqueueFn,
+        associate: AssociateFn,
+      ) {
         const members = new Set([...properties, ...exportedSymbols])
         for (const member of members) {
           const memberClassification = classifySymbol(member)
-          memberClassification.addToPage?.(page, member, enqueue)
+          memberClassification.addToPage?.(page, member, enqueue, associate)
         }
-        populateInterfacePage(page)
+        populateInterfacePage(page, enqueue, associate)
       }
 
-      function populateInterfacePage(page: DocPage) {
+      function populateInterfacePage(
+        page: DocPage,
+        _enqueue: EnqueueFn,
+        associate: AssociateFn,
+      ) {
         const instanceType =
           declaration.parent && checker.getTypeAtLocation(declaration)
         if (!instanceType) {
@@ -471,14 +529,23 @@ export async function generateDocs(
         if (instanceType.isClassOrInterface()) {
           const properties = instanceType.getProperties()
           for (const property of properties) {
-            page.instanceProperties.addEntry(getSymbolName(property), property)
+            associate(
+              page.instanceProperties.addEntry(
+                getSymbolName(property),
+                property,
+              ),
+              property,
+            )
           }
         } else if (!symbol.valueDeclaration) {
           const members: ts.Symbol[] = [
             ...(symbol.members?.values() || ([] as any)),
           ]
           for (const member of members) {
-            page.instanceProperties.addEntry(getSymbolName(member), member)
+            associate(
+              page.instanceProperties.addEntry(getSymbolName(member), member),
+              member,
+            )
           }
         }
       }
