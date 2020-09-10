@@ -98,20 +98,18 @@ export async function generateDocs(
 
     subpages: DocPage[] = []
     sections: DocSection<any>[] = []
-    modules = this.addSection('Modules')
-    globals = this.addSection<DocPage | null>('Globals')
-    namespaces = this.addSection('Namespaces')
-    classes = this.addSection('Classes')
-    enumerations = this.addSection('Enumerations')
-    types = this.addSection('Interfaces and Types')
-    callSignatures = this.addSection('Call Signatures')
-    constructors = this.addSection('Constructors')
-    properties = this.addSection(
-      this.kind === DocPageKind.Class ? 'Static Members' : 'Members',
-    )
-    instanceCallSignatures = this.addSection('Instance Call Signatures')
-    instanceConstructors = this.addSection('Instance Constructors')
-    instanceProperties = this.addSection('Instance Properties')
+    modules = this.addSection('modules')
+    globals = this.addSection<DocPage | null>('globals')
+    namespaces = this.addSection('namespaces')
+    classes = this.addSection('classes')
+    enumerations = this.addSection('enumerations')
+    types = this.addSection('types')
+    callSignatures = this.addSection('callSignatures')
+    constructors = this.addSection('constructors')
+    properties = this.addSection('properties')
+    instanceCallSignatures = this.addSection('instanceCallSignatures')
+    instanceConstructors = this.addSection('instanceConstructors')
+    instanceProperties = this.addSection('instanceProperties')
 
     private addSection<T = ts.Symbol>(title: string): DocSection<T> {
       const section = new DocSection<T>(this, title)
