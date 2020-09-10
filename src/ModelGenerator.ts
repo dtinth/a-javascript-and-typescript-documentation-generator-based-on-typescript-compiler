@@ -46,6 +46,8 @@ export async function generateDocs(
   rootFileNames: string[],
   generateOptions: GenerateOptions = {},
 ): Promise<GenerateDocsResult> {
+  const generatedAt = new Date().toJSON()
+
   rootFileNames = rootFileNames.map((n) => fs.realpathSync(n))
   const basePath = require('commondir')(
     rootFileNames.map((f) => path.dirname(f)),
@@ -67,6 +69,7 @@ export async function generateDocs(
 
   const program = project.createProgram()
   const checker = program.getTypeChecker()
+  const classifier = createClassifier()
   // const host = (project as ヤバい).languageServiceHost
 
   if (generateOptions.debug) {
@@ -87,24 +90,34 @@ export async function generateDocs(
       public kind: DocPageKind,
       public parent: DocEntry<any> | null,
       public name: string,
-    ) {}
+    ) {
+      if (parent) {
+        parent.section.page.subpages.push(this)
+      }
+    }
 
     subpages: DocPage[] = []
-    modules = new DocSection(this, 'Modules')
-    globals = new DocSection<null>(this, 'Globals')
-    namespaces = new DocSection(this, 'Namespaces')
-    classes = new DocSection(this, 'Classes')
-    enumerations = new DocSection(this, 'Enumerations')
-    types = new DocSection(this, 'Interfaces and Types')
-    callSignatures = new DocSection(this, 'Call Signatures')
-    constructors = new DocSection(this, 'Constructors')
-    instanceCallSignatures = new DocSection(this, 'Instance Call Signatures')
-    instanceConstructors = new DocSection(this, 'Instance Constructors')
-    instanceProperties = new DocSection(this, 'Instance Properties')
-    properties = new DocSection(
-      this,
+    sections: DocSection<any>[] = []
+    modules = this.addSection('Modules')
+    globals = this.addSection<null>('Globals')
+    namespaces = this.addSection('Namespaces')
+    classes = this.addSection('Classes')
+    enumerations = this.addSection('Enumerations')
+    types = this.addSection('Interfaces and Types')
+    callSignatures = this.addSection('Call Signatures')
+    constructors = this.addSection('Constructors')
+    properties = this.addSection(
       this.kind === DocPageKind.Class ? 'Static Members' : 'Members',
     )
+    instanceCallSignatures = this.addSection('Instance Call Signatures')
+    instanceConstructors = this.addSection('Instance Constructors')
+    instanceProperties = this.addSection('Instance Properties')
+
+    private addSection<T = ts.Symbol>(title: string): DocSection<T> {
+      const section = new DocSection<T>(this, title)
+      this.sections.push(section)
+      return section
+    }
 
     getBreadcrumb(): string {
       return (
@@ -143,20 +156,12 @@ export async function generateDocs(
 
   function main() {
     const sourceFilesSet = new Set(entrySourceFiles)
-
     const root = new DocPage(DocPageKind.Root, null, '(root)')
     const elaborationQueue = new Set<DocEntry<ts.Symbol>>()
     const symbolPageMap = new Map<ts.Symbol, DocPage>()
-    const typeEntryMap = new Map<ts.Type, DocEntry<ts.Symbol>>()
-    const classificationCache = new Map<ts.Symbol, ClassificationResult>()
 
     const enqueue = (entry: DocEntry<ts.Symbol>) => {
       elaborationQueue.add(entry)
-    }
-
-    function getTargetSymbol(symbol: ts.Symbol) {
-      symbol = skipAlias(symbol)
-      return resolveExternalModuleSymbol(symbol) || symbol
     }
 
     // Enqueue modules that are source files.
@@ -186,7 +191,7 @@ export async function generateDocs(
     let globalNamespacePage: DocPage | null = null
     for (const globalSymbol of checker.getExportsOfModule(globalThisSymbol)) {
       if (isDeclaredInsideEntryFile(globalSymbol)) {
-        const classification = classifySymbol(globalSymbol)
+        const classification = classifier.classifySymbol(globalSymbol)
         if (!globalNamespacePage) {
           const entry = root.globals.addEntry('(globals)', null)
           globalNamespacePage = new DocPage(
@@ -195,13 +200,15 @@ export async function generateDocs(
             '(globals)',
           )
         }
-        classification.addToPage?.(globalNamespacePage, globalSymbol)
+        classification.addToPage?.(globalNamespacePage, globalSymbol, enqueue)
       }
     }
 
     for (const entry of elaborationQueue) {
       processEntry(entry)
     }
+
+    return { root, symbolPageMap }
 
     function isDeclaredInsideEntryFile(symbol: ts.Symbol) {
       return (
@@ -210,11 +217,106 @@ export async function generateDocs(
       )
     }
 
-    type ClassificationResult = {
-      description: string
-      newPageOptions?: { kind: DocPageKind; name: string }
-      addToPage?: (page: DocPage, sourceSymbol: ts.Symbol) => void
-      populatePage?: (page: DocPage) => void
+    function processEntry(entry: DocEntry<ts.Symbol>) {
+      const symbol = getTargetSymbol(entry.target)
+      const classification = classifier.classifySymbol(symbol)
+      console.log(
+        `Elaborating ${entry}:`,
+        `${getSymbolName(symbol)} [${getSymbolFlags(symbol)} -> ${
+          classification.description
+        }]`,
+      )
+
+      if (!classification.newPageOptions) {
+        return
+      }
+
+      const { kind, name } = classification.newPageOptions
+      let page = symbolPageMap.get(symbol)
+      if (!page) {
+        page = new DocPage(kind, entry, name)
+        symbolPageMap.set(symbol, page)
+        classification.populatePage?.(page, enqueue)
+      }
+    }
+  }
+
+  function serialize(
+    root: DocPage,
+    symbolPageMap: Map<ts.Symbol, DocPage>,
+  ): Model {
+    const pageList = new PageList(root)
+    const serializedPages = pageList.pages.map(serializePage)
+
+    return {
+      metadata: {
+        generator: require('../package').name,
+        generatorVersion: require('../package').version,
+        generatedAt: generatedAt,
+      },
+      pages: serializedPages,
+      // entryModules: entryModuleSymbolIds,
+      // entrySourceFiles: entrySourceFileIds,
+      // symbols: Object.values(symbolDataById),
+      // sourceFiles: Object.values(sourceFileDataById),
+    }
+
+    function serializePage(page: DocPage) {
+      return {
+        name: page.name,
+        kind: page.kind,
+        subpages: page.subpages.map((p) => pageList.getPageId(p)),
+        sections: page.sections
+          .filter((s) => s.entries.length > 0)
+          .map((section) => {
+            return {
+              title: section.title,
+            }
+          }),
+      }
+    }
+  }
+
+  class PageList {
+    pages: DocPage[] = []
+    pageToPageIdMap = new Map<DocPage, number>()
+
+    constructor(root: DocPage) {
+      const visit = (page: DocPage) => {
+        this.pageToPageIdMap.set(page, this.pages.length)
+        this.pages.push(page)
+        page.subpages.forEach(visit)
+      }
+      visit(root)
+    }
+
+    getPageId(page: DocPage) {
+      const pageId = this.pageToPageIdMap.get(page)
+      if (pageId == null) {
+        throw new Error(`Unrecognized page: ${page.name}`)
+      }
+      return pageId
+    }
+  }
+
+  type ClassificationResult = {
+    description: string
+    newPageOptions?: { kind: DocPageKind; name: string }
+    addToPage?: (
+      page: DocPage,
+      sourceSymbol: ts.Symbol,
+      enqueuePage: EnqueueFn,
+    ) => void
+    populatePage?: (page: DocPage, enqueuePage: EnqueueFn) => void
+  }
+
+  type EnqueueFn = (entry: DocEntry<ts.Symbol>) => void
+
+  function createClassifier() {
+    const typeEntryMap = new Map<ts.Type, DocEntry<ts.Symbol>>()
+    const classificationCache = new Map<ts.Symbol, ClassificationResult>()
+    return {
+      classifySymbol,
     }
 
     function classifySymbol(symbol: ts.Symbol): ClassificationResult {
@@ -242,7 +344,7 @@ export async function generateDocs(
         ) {
           return {
             description: 'Interface',
-            addToPage: (page, originSymbol) => {
+            addToPage: (page, originSymbol, enqueue) => {
               enqueue(page.types.addEntry(getSymbolName(originSymbol), symbol))
             },
             newPageOptions: createPageOptions(DocPageKind.Interface),
@@ -305,7 +407,7 @@ export async function generateDocs(
               : DocPageKind.Namespace,
           ),
           populatePage: populateValuePage,
-          addToPage: (page, originSymbol) => {
+          addToPage: (page, originSymbol, enqueue) => {
             const category = constructable
               ? page.classes
               : callable
@@ -352,11 +454,11 @@ export async function generateDocs(
         return { kind, name: getSymbolName(symbol) }
       }
 
-      function populateValuePage(page: DocPage) {
+      function populateValuePage(page: DocPage, enqueue: EnqueueFn) {
         const members = new Set([...properties, ...exportedSymbols])
         for (const member of members) {
           const memberClassification = classifySymbol(member)
-          memberClassification.addToPage?.(page, member)
+          memberClassification.addToPage?.(page, member, enqueue)
         }
         populateInterfacePage(page)
       }
@@ -382,70 +484,6 @@ export async function generateDocs(
         }
       }
     }
-
-    function processEntry(entry: DocEntry<ts.Symbol>) {
-      const symbol = getTargetSymbol(entry.target)
-      const classification = classifySymbol(symbol)
-      console.log(
-        `Elaborating ${entry}:`,
-        `${getSymbolName(symbol)} [${getSymbolFlags(symbol)} -> ${
-          classification.description
-        }]`,
-      )
-
-      if (!classification.newPageOptions) {
-        return
-      }
-
-      const { kind, name } = classification.newPageOptions
-      let page = symbolPageMap.get(symbol)
-      if (!page) {
-        page = new DocPage(kind, entry, name)
-        symbolPageMap.set(symbol, page)
-        classification.populatePage?.(page)
-      }
-
-      // const symbolFlags = symbol.getFlags()
-      // for (const exportedSymbol of checker.getExportsOfModule(symbol)) {
-      //   if (exportedSymbol.declarations?.length) {
-      //     processNamespaceExport(
-      //       getOrCreatePageForSymbol(symbol, entry, DocPageKind.Namespace),
-      //       exportedSymbol,
-      //     )
-      //   }
-      // }
-
-      // checker.resolve
-      // for (const exportedSymbol of checker.getExportsOfModule(symbol)) {
-      //   // enqueue(exportedSymbol, docNode)
-      // }
-      // const members: ts.Symbol[] = [
-      //   ...(symbol.members?.values() || ([] as any)),
-      // ]
-      // for (const memberSymbol of members) {
-      //   console.log(`   -> Member ${memberSymbol.getName()}`)
-      // }
-
-      // const declaration = symbol.declarations?.[0]
-      // if (!declaration) {
-      //   console.log(`  -> No declaration, skipping...`)
-      // }
-
-      // const type =
-      //   declaration.parent && !(symbolFlags & ts.SymbolFlags.Class)
-      //     ? checker.getTypeAtLocation(declaration)
-      //     : checker.getTypeOfSymbolAtLocation(symbol, declaration)
-      // console.log(`   -> Type is ${checker.typeToString(type)}`)
-
-      // const constructSignatures = type.getConstructSignatures()
-      // const callSignatures = type.getCallSignatures()
-      // const properties = type.getProperties()
-      // for (const property of properties) {
-      //   if (withInternals(property).parent === symbol) {
-      //     enqueue(property, docNode)
-      //   }
-      // }
-    }
   }
 
   function skipAlias(symbol: ts.Symbol) {
@@ -454,117 +492,10 @@ export async function generateDocs(
       : symbol
   }
 
-  // function getSymbolId(symbol: ts.Symbol): string {
-  //   if (symbol.getFlags() & ts.SymbolFlags.Alias) {
-  //     const aliasedSymbol = typeChecker.getAliasedSymbol(symbol)
-  //     return getSymbolId(aliasedSymbol)
-  //   }
-  //   const existingId = symbolToIdMap.get(symbol)
-  //   if (existingId) return existingId
-  //   const name = symbol.getName()
-  //   const id = `${nextSymbolId++}_${name}`
-  //   symbolToIdMap.set(symbol, id)
-  //   const symbolData: SymbolData = {
-  //     id,
-  //     name: name,
-  //     flags: getSymbolFlags(symbol),
-  //     documentationComment: symbol.getDocumentationComment(typeChecker),
-  //     jsDocTags: symbol.getJsDocTags(),
-  //   }
-  //   symbolDataById[id] = symbolData
-  //   console.log('Reading', id, `[${symbolData.flags}]`)
-  //   const declarations = symbol.getDeclarations()
-  //   if (declarations) {
-  //     symbolData.declarations = []
-  //     for (const declaration of declarations) {
-  //       const info = getDeclarationInfo(declaration)
-  //       if (info) symbolData.declarations.push(info)
-  //     }
-  //   }
-  //   return id
-  // }
-  // function getDeclarationInfo(declaration: ts.Declaration) {
-  //   if (!declaration) return
-  //   const startPosition = declaration.getStart()
-  //   const sourceFile = declaration.getSourceFile()
-  //   const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
-  //   const declaredAt: DeclarationInfo = {
-  //     line: start.line,
-  //     character: start.character,
-  //     position: startPosition,
-  //     sourceFile: getSourceFileId(sourceFile),
-  //   }
-  //   return declaredAt
-  // }
-
-  // function visitSymbol(symbol: ts.Symbol): string {
-  //   if (symbol.getFlags() & ts.SymbolFlags.Alias) {
-  //     const aliasedSymbol = typeChecker.getAliasedSymbol(symbol)
-  //     return visitSymbol(aliasedSymbol)
-  //   }
-  //   const id = getSymbolId(symbol)
-  //   symbolsToElaborate.add(symbol)
-  //   return id
-  // }
-
-  // function elaborateOnSymbol(symbol: ts.Symbol) {
-  //   const id = getSymbolId(symbol)
-  //   const symbolData = symbolDataById[id]
-  //   console.log('Elaborating', id)
-
-  //   const declaredType = typeChecker.getDeclaredTypeOfSymbol(symbol)
-  //   Object.assign(symbolData, {
-  //     _declaredType: typeChecker.typeToString(declaredType),
-  //   })
-
-  //   const firstlyDeclared = symbol.getDeclarations()?.[0]
-  //   const symbolType =
-  //     firstlyDeclared &&
-  //     typeChecker.getTypeOfSymbolAtLocation(symbol, firstlyDeclared)
-  //   if (symbolType) {
-  //     Object.assign(symbolData, {
-  //       _symbolType: typeChecker.typeToString(symbolType, firstlyDeclared),
-  //     })
-  //   }
-
-  //   const symbolFlags = symbol.getFlags()
-  //   if (symbolFlags & ts.SymbolFlags.Module) {
-  //     const exported = typeChecker.getExportsOfModule(symbol)
-  //     symbolData.exports = exported.map(visitNamedSymbol)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.TypeAlias) {
-  //     const declarationType =
-  //       firstlyDeclared &&
-  //       ts.isTypeAliasDeclaration(firstlyDeclared) &&
-  //       firstlyDeclared.type
-  //     symbolData.type =
-  //       declarationType && ts.isTypeLiteralNode(declarationType)
-  //         ? getElaboratedTypeInfo(declaredType, symbol)
-  //         : getBriefTypeInfo(declaredType)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.Variable && symbolType) {
-  //     symbolData.type = getBriefTypeInfo(symbolType)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.Function && symbolType) {
-  //     symbolData.type = getBriefTypeInfo(symbolType)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.Interface) {
-  //     symbolData.type = getElaboratedTypeInfo(declaredType, symbol)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.Class && symbolType) {
-  //     symbolData.type = getElaboratedTypeInfo(declaredType, symbol)
-  //     symbolData.static = getElaboratedTypeInfo(symbolType, symbol)
-  //   }
-
-  //   if (symbolFlags & ts.SymbolFlags.Method && symbolType) {
-  //     symbolData.type = getBriefTypeInfo(symbolType)
-  //   }
-  // }
+  function getTargetSymbol(symbol: ts.Symbol) {
+    symbol = skipAlias(symbol)
+    return resolveExternalModuleSymbol(symbol) || symbol
+  }
 
   // function getBriefTypeInfo(type: ts.Type): TypeInfo {
   //   return {
@@ -639,32 +570,7 @@ export async function generateDocs(
   //     // TODO: getTypeParameters
   //   }
   // }
-  // function visitNamedSymbol(symbol: ts.Symbol): NamedSymbolInfo {
-  //   return { name: symbol.getName(), symbol: visitSymbol(symbol) }
-  // }
 
-  // function getTypeFlags(type: ts.Type): string[] {
-  //   const flags = type.getFlags()
-  //   const out: string[] = []
-  //   for (const [key, value] of Object.entries(ts.TypeFlags)) {
-  //     if (
-  //       typeof value === 'number' &&
-  //       value.toString(2).match(/^10*$/) &&
-  //       flags & value
-  //     ) {
-  //       out.push(key)
-  //     }
-  //   }
-  //   return out
-  // }
-
-  // main()
-  // console.log(
-  //   `Symbol stats: ` +
-  //     `${program.getSymbolCount()} total, ` +
-  //     `${Object.keys(symbolDataById).length} read, ` +
-  //     `${elaboratedSymbols.size} elaborated`,
-  // )
   function resolveExternalModuleSymbol(symbol: ts.Symbol): ts.Symbol {
     return (checker as ヤバい).resolveExternalModuleSymbol(symbol)
   }
@@ -688,17 +594,13 @@ export async function generateDocs(
     return symbol.getName()
   }
 
-  main()
-
-  return {
-    model: {
-      // entryModules: entryModuleSymbolIds,
-      // entrySourceFiles: entrySourceFileIds,
-      // symbols: Object.values(symbolDataById),
-      // sourceFiles: Object.values(sourceFileDataById),
-    },
-    program,
-    checker: checker,
+  {
+    const { root, symbolPageMap } = main()
+    return {
+      model: serialize(root, symbolPageMap),
+      program,
+      checker: checker,
+    }
   }
 }
 
@@ -717,6 +619,21 @@ function getSymbolFlags(symbol: ts.Symbol): string[] {
   }
   return out
 }
+
+// function getTypeFlags(type: ts.Type): string[] {
+//   const flags = type.getFlags()
+//   const out: string[] = []
+//   for (const [key, value] of Object.entries(ts.TypeFlags)) {
+//     if (
+//       typeof value === 'number' &&
+//       value.toString(2).match(/^10*$/) &&
+//       flags & value
+//     ) {
+//       out.push(key)
+//     }
+//   }
+//   return out
+// }
 
 function getSymbolParent(symbol: ts.Symbol): ts.Symbol | undefined {
   return (symbol as ヤバい).parent
