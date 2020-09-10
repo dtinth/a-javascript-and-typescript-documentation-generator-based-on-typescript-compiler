@@ -111,8 +111,8 @@ export async function generateDocs(
     instanceConstructors = this.addSection('instanceConstructors')
     instanceProperties = this.addSection('instanceProperties')
 
-    private addSection<T = ts.Symbol>(title: string): DocSection<T> {
-      const section = new DocSection<T>(this, title)
+    private addSection<T = ts.Symbol>(key: string): DocSection<T> {
+      const section = new DocSection<T>(this, key)
       this.sections.push(section)
       return section
     }
@@ -127,7 +127,7 @@ export async function generateDocs(
   }
 
   class DocSection<T> {
-    constructor(public page: DocPage, public title: string) {}
+    constructor(public page: DocPage, public key: string) {}
     entries: DocEntry<T>[] = []
     addEntry(name: string, target: T) {
       const entry: DocEntry<T> = new DocEntry(this, name, target)
@@ -148,7 +148,7 @@ export async function generateDocs(
       if (this.section.page.parent) {
         prefix = this.section.page.parent.toString() + ' » '
       }
-      return prefix + this.section.title + ' » ' + this.name
+      return prefix + this.section.key + ' » ' + this.name
     }
   }
 
@@ -269,7 +269,7 @@ export async function generateDocs(
           .filter((s) => s.entries.length > 0)
           .map((section) => {
             return {
-              title: section.title,
+              key: section.key,
             }
           }),
       }
