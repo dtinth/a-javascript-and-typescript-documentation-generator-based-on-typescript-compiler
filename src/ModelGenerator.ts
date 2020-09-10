@@ -99,7 +99,7 @@ export async function generateDocs(
     subpages: DocPage[] = []
     sections: DocSection<any>[] = []
     modules = this.addSection('Modules')
-    globals = this.addSection<null>('Globals')
+    globals = this.addSection<DocPage | null>('Globals')
     namespaces = this.addSection('Namespaces')
     classes = this.addSection('Classes')
     enumerations = this.addSection('Enumerations')
@@ -128,7 +128,7 @@ export async function generateDocs(
     }
   }
 
-  class DocSection<T = ts.Symbol> {
+  class DocSection<T> {
     constructor(public page: DocPage, public title: string) {}
     entries: DocEntry<T>[] = []
     addEntry(name: string, target: T) {
@@ -193,12 +193,13 @@ export async function generateDocs(
       if (isDeclaredInsideEntryFile(globalSymbol)) {
         const classification = classifier.classifySymbol(globalSymbol)
         if (!globalNamespacePage) {
-          const entry = root.globals.addEntry('(globals)', null)
+          const entry = root.globals.addEntry('(globals)', globalNamespacePage)
           globalNamespacePage = new DocPage(
             DocPageKind.Namespace,
             entry,
             '(globals)',
           )
+          entry.target = globalNamespacePage
         }
         classification.addToPage?.(globalNamespacePage, globalSymbol, enqueue)
       }
