@@ -61,16 +61,11 @@ export async function generateDocs(
     compilerOptions: options,
   })
   const entrySourceFiles = await project.addSourceFilesByPaths(rootFileNames)
-  // const referenceSourceFile = project.createSourceFile(
-  //   basePath + '/doc-gen-root',
-  //   'export {}',
-  // )
   project.resolveSourceFileDependencies()
 
   const program = project.createProgram()
   const checker = program.getTypeChecker()
   const classifier = createClassifier()
-  // const host = (project as ヤバい).languageServiceHost
 
   if (generateOptions.debug) {
     debugger
@@ -99,35 +94,49 @@ export async function generateDocs(
     subpages: DocPage[] = []
     sections: DocSection<any>[] = []
     modules = this.addSection('modules')
-    globals = this.addSection<DocPage | null>('globals')
+    globals = this.addSection('globals', globalsSerializer)
     namespaces = this.addSection('namespaces')
     classes = this.addSection('classes')
     enumerations = this.addSection('enumerations')
     types = this.addSection('types')
-    callSignatures = this.addSection('callSignatures')
-    constructors = this.addSection('constructors')
+    callSignatures = this.addSection('callSignatures', signatureSerializer)
+    constructors = this.addSection('constructors', signatureSerializer)
     properties = this.addSection('properties')
-    instanceCallSignatures = this.addSection('instanceCallSignatures')
-    instanceConstructors = this.addSection('instanceConstructors')
+    instanceCallSignatures = this.addSection(
+      'instanceCallSignatures',
+      signatureSerializer,
+    )
+    instanceConstructors = this.addSection(
+      'instanceConstructors',
+      signatureSerializer,
+    )
     instanceProperties = this.addSection('instanceProperties')
 
-    private addSection<T = ts.Symbol>(key: string): DocSection<T> {
-      const section = new DocSection<T>(this, key)
+    private addSection(key: string): DocSection<ts.Symbol>
+    private addSection<T>(
+      key: string,
+      serializer: DocEntrySerializer<T>,
+    ): DocSection<T>
+    private addSection(
+      key: string,
+      serializer: DocEntrySerializer<any> = symbolSerializer,
+    ): DocSection<any> {
+      const section = new DocSection<ts.Symbol>(this, key, serializer)
       this.sections.push(section)
       return section
     }
 
-    getBreadcrumb(): string {
-      return (
-        (this.parent && this.parent.section.page.kind !== DocPageKind.Root
-          ? `${this.parent.section.page.getBreadcrumb()} > `
-          : '') + this.name
-      )
+    inspect(): string {
+      return `<Page ${this.name} (${this.kind})>`
     }
   }
 
   class DocSection<T> {
-    constructor(public page: DocPage, public key: string) {}
+    constructor(
+      public page: DocPage,
+      public key: string,
+      public serializer: DocEntrySerializer<T>,
+    ) {}
     entries: DocEntry<T>[] = []
     addEntry(name: string, target: T) {
       const entry: DocEntry<T> = new DocEntry(this, name, target)
@@ -143,6 +152,7 @@ export async function generateDocs(
       public name: string,
       public target: T,
     ) {}
+
     toString() {
       let prefix = ''
       if (this.section.page.parent) {
@@ -150,6 +160,37 @@ export async function generateDocs(
       }
       return prefix + this.section.key + ' » ' + this.name
     }
+
+    inspect(): string {
+      return `<Entry ${this.toString()}>`
+    }
+  }
+
+  interface DocEntrySerializer<T> {
+    serialize(entry: DocEntry<T>): any
+  }
+
+  const symbolSerializer: DocEntrySerializer<ts.Symbol> = {
+    serialize(entry) {
+      return {
+        name: entry.name,
+        info: {
+          type: 'symbol',
+        },
+      }
+    },
+  }
+
+  const globalsSerializer: DocEntrySerializer<DocPage | null> = {
+    serialize(_entry) {
+      // return getSymbolName(symbol)
+    },
+  }
+
+  const signatureSerializer: DocEntrySerializer<ts.Signature> = {
+    serialize(_entry) {
+      // return getSymbolName(symbol)
+    },
   }
 
   class DocBuilder {
@@ -304,17 +345,32 @@ export async function generateDocs(
     }
 
     function serializePage(page: DocPage) {
-      return {
-        name: page.name,
-        kind: page.kind,
-        subpages: page.subpages.map((p) => pageList.getPageId(p)),
-        sections: page.sections
-          .filter((s) => s.entries.length > 0)
-          .map((section) => {
-            return {
-              key: section.key,
-            }
-          }),
+      try {
+        return {
+          name: page.name,
+          kind: page.kind,
+          subpages: page.subpages.map((p) => pageList.getPageId(p)),
+          sections: page.sections
+            .filter((s) => s.entries.length > 0)
+            .map((section) => {
+              return {
+                key: section.key,
+                entries: section.entries.map((e) => serializeEntry(e)),
+              }
+            }),
+        }
+      } catch (error) {
+        error.message = `Failed to format ${page.inspect()}: ${error.message}`
+        throw error
+      }
+    }
+
+    function serializeEntry(entry: DocEntry<any>) {
+      try {
+        return entry.section.serializer.serialize(entry)
+      } catch (error) {
+        error.message = `Failed to format ${entry.inspect()}: ${error.message}`
+        throw error
       }
     }
   }
@@ -679,6 +735,6 @@ function getSymbolFlags(symbol: ts.Symbol): string[] {
 //   return out
 // }
 
-function getSymbolParent(symbol: ts.Symbol): ts.Symbol | undefined {
-  return (symbol as ヤバい).parent
-}
+// function getSymbolParent(symbol: ts.Symbol): ts.Symbol | undefined {
+//   return (symbol as ヤバい).parent
+// }
