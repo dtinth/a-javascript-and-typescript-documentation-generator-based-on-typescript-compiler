@@ -393,7 +393,7 @@ export async function generateDocs(
       if (id) {
         return id
       }
-      id = `${this.nextId++}`
+      id = `${symbol.getName()}$${this.nextId++}`
       this.symbolToSymbolIdMap.set(symbol, id)
       this.symbolIdToSymbolMap.set(id, symbol)
       return id
