@@ -12,6 +12,8 @@ import {
   NamedSymbolInfo,
   SourceFileData,
 } from './Model'
+import readPkgUp from 'read-pkg-up'
+import { dirname, join } from 'path'
 
 export type GenerateOptions = {
   debug?: boolean
@@ -70,6 +72,7 @@ export async function generateDocs(
   if (generateOptions.debug) {
     debugger
   }
+  const sourceFileRegistry = new SourceFileRegistry()
 
   enum DocPageKind {
     Root = 'root',
@@ -172,11 +175,20 @@ export async function generateDocs(
 
   const symbolSerializer: DocEntrySerializer<ts.Symbol> = {
     serialize(entry, delegate) {
+      const symbol = entry.target
+      const classification = classifier.classifySymbol(symbol)
+      const firstDeclaration = symbol.declarations?.[0]
+      const type = firstDeclaration
+        ? checker.getTypeOfSymbolAtLocation(symbol, firstDeclaration)
+        : null
       return {
         id: delegate.getEntryId(entry),
         name: entry.name,
         info: {
           type: 'symbol',
+          kind: classification.kind,
+          symbolId: delegate.getSymbolId(symbol),
+          typeInfo: type ? serializeType(type, delegate) : undefined,
         },
       }
     },
@@ -333,7 +345,7 @@ export async function generateDocs(
       processEntry(entry)
     }
 
-    return { root, symbolPageMap, entryIdRegistry }
+    return { root, symbolPageMap, symbolEntryMap, entryIdRegistry }
 
     function isDeclaredInsideEntryFile(symbol: ts.Symbol) {
       return (
@@ -348,7 +360,7 @@ export async function generateDocs(
       console.log(
         `Elaborating ${entry}:`,
         `${getSymbolName(symbol)} [${getSymbolFlags(symbol)} -> ${
-          classification.description
+          classification.kind
         }]`,
       )
 
@@ -367,22 +379,84 @@ export async function generateDocs(
   }
 
   interface SerializeDelegate {
+    getPageId(page: DocPage): number
     getEntryId(entry: DocEntry<any>): string
+    getSymbolId(symbol: ts.Symbol): string
+  }
+
+  class SymbolRegistry {
+    private symbolToSymbolIdMap = new Map<ts.Symbol, string>()
+    private symbolIdToSymbolMap = new Map<string, ts.Symbol>()
+    private nextId = 1
+    getSymbolId(symbol: ts.Symbol): string {
+      let id = this.symbolToSymbolIdMap.get(symbol)
+      if (id) {
+        return id
+      }
+      id = `${this.nextId++}`
+      this.symbolToSymbolIdMap.set(symbol, id)
+      this.symbolIdToSymbolMap.set(id, symbol)
+      return id
+    }
+    serialize(
+      symbolPageMap: Map<ts.Symbol, DocPage>,
+      symbolEntryMap: Map<ts.Symbol, DocEntry<any>>,
+      delegate: SerializeDelegate,
+    ) {
+      return Object.fromEntries(
+        [...this.symbolIdToSymbolMap].map(([symbolId, symbol]) => {
+          const declarations = symbol
+            .getDeclarations()
+            ?.map((d) => serializeDeclaration(d))
+          const entry = symbolEntryMap.get(symbol)
+          const page = symbolPageMap.get(symbol)
+          return [
+            symbolId,
+            {
+              name: symbol.getName(),
+              entryId: entry ? delegate.getEntryId(entry) : undefined,
+              pageId: page ? delegate.getPageId(page) : undefined,
+              declarations,
+            },
+          ]
+        }),
+      )
+
+      function serializeDeclaration(declaration: ts.Declaration) {
+        const startPosition = declaration.getStart()
+        const sourceFile = declaration.getSourceFile()
+        const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
+        const declaredAt: DeclarationInfo = {
+          line: start.line,
+          character: start.character,
+          position: startPosition,
+          sourceFile: sourceFileRegistry.getSourceFileId(sourceFile),
+        }
+        return declaredAt
+      }
+    }
   }
 
   function serialize(
     root: DocPage,
     symbolPageMap: Map<ts.Symbol, DocPage>,
+    symbolEntryMap: Map<ts.Symbol, DocEntry<any>>,
     entryIdRegistry: EntryIdRegistry,
   ): Model {
-    const pageList = new PageList(root)
+    const pageList = new PageList(root, entryIdRegistry)
+    const symbolRegistry = new SymbolRegistry()
     const delegate: SerializeDelegate = {
       getEntryId(entry) {
         return entryIdRegistry.getEntryId(entry)
       },
+      getSymbolId(symbol) {
+        return symbolRegistry.getSymbolId(symbol)
+      },
+      getPageId(page) {
+        return pageList.getPageId(page)
+      },
     }
-    const serializedPages = pageList.pages.map(serializePage)
-
+    const serializedPages = pageList.serialize(delegate)
     return {
       metadata: {
         generator: require('../package').name,
@@ -390,56 +464,46 @@ export async function generateDocs(
         generatedAt: generatedAt,
       },
       pages: serializedPages,
+      symbols: symbolRegistry.serialize(
+        symbolPageMap,
+        symbolEntryMap,
+        delegate,
+      ),
       // entryModules: entryModuleSymbolIds,
       // entrySourceFiles: entrySourceFileIds,
       // symbols: Object.values(symbolDataById),
       // sourceFiles: Object.values(sourceFileDataById),
     }
-
-    function serializePage(page: DocPage) {
-      try {
-        return {
-          name: page.name,
-          kind: page.kind,
-          subpages: page.subpages.map((p) => pageList.getPageId(p)),
-          sections: page.sections
-            .filter((s) => s.entries.length > 0)
-            .map((section) => {
-              return {
-                key: section.key,
-                entries: section.entries.map((e) => serializeEntry(e)),
-              }
-            }),
-        }
-      } catch (error) {
-        error.message = `Failed to format ${page.inspect()}: ${error.message}`
-        throw error
-      }
-    }
-
-    function serializeEntry(entry: DocEntry<any>) {
-      try {
-        return entry.section.serializer.serialize(entry, delegate)
-      } catch (error) {
-        error.message = `Failed to format ${entry.inspect()}: ${error.message}`
-        throw error
-      }
-    }
   }
 
   class PageList {
     pages: DocPage[] = []
-    pageToPageIdMap = new Map<DocPage, number>()
+    pageToPageIdMap = new Map<DocPage, string>()
+    usedPageIds = new Set<string>()
 
-    constructor(root: DocPage) {
+    constructor(root: DocPage, entryIdRegistry: EntryIdRegistry) {
       const visit = (page: DocPage) => {
-        this.pageToPageIdMap.set(page, this.pages.length)
+        let idBase = page.parent
+          ? entryIdRegistry
+              .getEntryId(page.parent)
+              .replace(/[^\w]/g, ' ')
+              .trim()
+              .replace(/ /g, '-')
+          : 'index'
+        let pageId: string
+        for (let i = 0; ; i++) {
+          const proposedPageId = idBase + (i ? '_' + i : '')
+          if (!this.usedPageIds.has(proposedPageId)) {
+            pageId = proposedPageId
+            break
+          }
+        }
+        this.pageToPageIdMap.set(page, pageId)
         this.pages.push(page)
         page.subpages.forEach(visit)
       }
       visit(root)
     }
-
     getPageId(page: DocPage) {
       const pageId = this.pageToPageIdMap.get(page)
       if (pageId == null) {
@@ -447,10 +511,47 @@ export async function generateDocs(
       }
       return pageId
     }
+    serialize(delegate: SerializeDelegate) {
+      const pageList = this
+      return this.pages.map(serializePage)
+
+      function serializePage(page: DocPage) {
+        try {
+          return {
+            id: pageList.getPageId(page),
+            name: page.name,
+            kind: page.kind,
+            subpages: page.subpages.map((p) => pageList.getPageId(p)),
+            sections: page.sections
+              .filter((s) => s.entries.length > 0)
+              .map((section) => {
+                return {
+                  key: section.key,
+                  entries: section.entries.map((e) => serializeEntry(e)),
+                }
+              }),
+          }
+        } catch (error) {
+          error.message = `Failed to format ${page.inspect()}: ${error.message}`
+          throw error
+        }
+      }
+
+      function serializeEntry(entry: DocEntry<any>) {
+        try {
+          return entry.section.serializer.serialize(entry, delegate)
+        } catch (error) {
+          error.message = `Failed to format ${entry.inspect()}: ${
+            error.message
+          }`
+          throw error
+        }
+      }
+    }
   }
 
   type ClassificationResult = {
-    description: string
+    kind: string
     newPageOptions?: { kind: DocPageKind; name: string }
     addToPage?: (
       page: DocPage,
@@ -480,7 +581,7 @@ export async function generateDocs(
     function doClassifySymbol(symbol: ts.Symbol): ClassificationResult {
       const declaration = symbol.declarations?.[0]
       if (!declaration) {
-        return { description: 'Unclassified' }
+        return { kind: 'unclassified' }
       }
 
       // Pure type...
@@ -491,7 +592,7 @@ export async function generateDocs(
           type.getProperties().length + type.getCallSignatures().length > 0
         ) {
           return {
-            description: 'Interface',
+            kind: 'interface',
             addToPage: (page, originSymbol, delegate) => {
               delegate.addSubpage(page.types, originSymbol, symbol)
             },
@@ -500,7 +601,7 @@ export async function generateDocs(
           }
         } else {
           return {
-            description: 'Type Alias',
+            kind: 'typeAlias',
             addToPage: (page, originSymbol, delegate) => {
               delegate.addSymbolEntry(page.types, originSymbol, symbol)
             },
@@ -517,7 +618,7 @@ export async function generateDocs(
         const targetSymbol = previouslyDocumentedEntry.target
         const classification = classifySymbol(targetSymbol)
         return {
-          description: classification.description,
+          kind: classification.kind,
           addToPage: (page, originSymbol, delegate) => {
             delegate.addSymbolEntry(page.properties, originSymbol, targetSymbol)
           },
@@ -542,11 +643,7 @@ export async function generateDocs(
         const constructable = constructSignatures.length > 0
         const callable = callSignatures.length > 0
         return {
-          description: constructable
-            ? 'Class'
-            : callable
-            ? 'Function'
-            : 'Namespace',
+          kind: constructable ? 'class' : callable ? 'function' : 'namespace',
           newPageOptions: createPageOptions(
             constructable
               ? DocPageKind.Class
@@ -582,14 +679,14 @@ export async function generateDocs(
         }
       } else if (typeIsObject && callSignatures.length > 0) {
         return {
-          description: 'Function',
+          kind: 'function',
           addToPage: (page, originSymbol, delegate) => {
             delegate.addSymbolEntry(page.properties, originSymbol, symbol)
           },
         }
       } else {
         return {
-          description: 'Member',
+          kind: 'member',
           addToPage: (page, originSymbol, delegate) => {
             delegate.addSymbolEntry(page.properties, originSymbol, symbol)
           },
@@ -649,26 +746,30 @@ export async function generateDocs(
     return resolveExternalModuleSymbol(symbol) || symbol
   }
 
-  // function getBriefTypeInfo(type: ts.Type): TypeInfo {
-  //   return {
-  //     parts: protectFromFailure(
-  //       () =>
-  //         typeToLinkedSymbolParts(typeChecker, type).map((x) =>
-  //           x.symbol ? [getSymbolId(x.symbol), x.text] : x.text,
-  //         ),
-  //       (e) => [`Failed to generate parts: ${e}`],
-  //     ),
-  //     flags: getTypeFlags(type),
-  //   }
-  // }
+  function serializeType(type: ts.Type, delegate: SerializeDelegate) {
+    return {
+      parts: protectFromFailure(
+        () =>
+          typeToLinkedSymbolParts(checker, type).map((x) =>
+            x.symbol
+              ? ([delegate.getSymbolId(x.symbol), x.text] as const)
+              : x.text,
+          ),
+        (e) => {
+          console.error('Cannot serialize type properly:', e)
+          return [checker.typeToString(type)]
+        },
+      ),
+    }
+  }
 
-  // function protectFromFailure<T>(f: () => T, fallback: (e: Error) => T) {
-  //   try {
-  //     return f()
-  //   } catch (e) {
-  //     return fallback(e)
-  //   }
-  // }
+  function protectFromFailure<T>(f: () => T, fallback: (e: Error) => T) {
+    try {
+      return f()
+    } catch (e) {
+      return fallback(e)
+    }
+  }
 
   // function getElaboratedTypeInfo(
   //   type: ts.Type,
@@ -735,21 +836,15 @@ export async function generateDocs(
       symbolName.endsWith('"') &&
       ts.isSourceFile(declaration)
     ) {
-      const relativePath: string = require('path').relative(
-        process.cwd(),
-        declaration.fileName,
-      )
-      return relativePath
-        .replace(/(?:\.d)?\.[tj]sx?$/, '')
-        .replace(/\/index$/, '')
+      return sourceFileRegistry.getNonspecificSpecifier(declaration)
     }
     return symbol.getName()
   }
 
   {
-    const { root, symbolPageMap, entryIdRegistry } = main()
+    const { root, symbolPageMap, symbolEntryMap, entryIdRegistry } = main()
     return {
-      model: serialize(root, symbolPageMap, entryIdRegistry),
+      model: serialize(root, symbolPageMap, symbolEntryMap, entryIdRegistry),
       program,
       checker: checker,
     }
@@ -790,3 +885,65 @@ function getSymbolFlags(symbol: ts.Symbol): string[] {
 // function getSymbolParent(symbol: ts.Symbol): ts.Symbol | undefined {
 //   return (symbol as ヤバい).parent
 // }
+
+type SourceFileInfo = {
+  specificSpecifier: string
+  nonspecificSpecifier: string
+}
+
+class SourceFileRegistry {
+  sourceFileToIdMap = new Map<ts.SourceFile, string>()
+  sourceFileInfoCache = new Map<ts.SourceFile, SourceFileInfo>()
+  getSourceFileId(sourceFile: ts.SourceFile) {
+    let id = this.sourceFileToIdMap.get(sourceFile)
+    if (id) {
+      return id
+    }
+    id = this.getSourceFileInfo(sourceFile).specificSpecifier
+    return id
+  }
+  getNonspecificSpecifier(sourceFile: ts.SourceFile) {
+    return this.getSourceFileInfo(sourceFile).nonspecificSpecifier
+  }
+  private getSourceFileInfo(sourceFile: ts.SourceFile): SourceFileInfo {
+    let info = this.sourceFileInfoCache.get(sourceFile)
+    if (info) {
+      return info
+    }
+    const pkg = sourceFile.fileName.includes('node_modules')
+      ? readPkgUp.sync({
+          cwd: dirname(sourceFile.fileName),
+        })
+      : null
+    if (pkg?.packageJson?.name) {
+      const packageName = pkg.packageJson.name
+      const packagePath = dirname(pkg.path)
+      const relativePath: string = require('path')
+        .relative(packagePath, sourceFile.fileName)
+        .replace(/\\/g, '/')
+      const typingsFile = pkg.packageJson.types || pkg.packageJson.typings
+      const sourceFileIsPackageTypingsEntryFile =
+        typingsFile && join(packagePath, typingsFile) === sourceFile.fileName
+      info = {
+        specificSpecifier: `${packageName}@${pkg.packageJson.version}/${relativePath}`,
+        nonspecificSpecifier: sourceFileIsPackageTypingsEntryFile
+          ? packageName
+          : `${packageName}/${relativePath
+              .replace(/(?:\.d)?\.[tj]sx?$/, '')
+              .replace(/\/index$/, '')}`,
+      }
+    } else {
+      const relativePath: string = require('path')
+        .relative(process.cwd(), sourceFile.fileName)
+        .replace(/\\/g, '/')
+      info = {
+        specificSpecifier: `./${relativePath}`,
+        nonspecificSpecifier: `./${relativePath
+          .replace(/(?:\.d)?\.[tj]sx?$/, '')
+          .replace(/\/index$/, '')}`,
+      }
+    }
+    this.sourceFileInfoCache.set(sourceFile, info)
+    return info
+  }
+}

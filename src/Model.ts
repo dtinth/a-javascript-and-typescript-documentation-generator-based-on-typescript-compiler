@@ -6,6 +6,7 @@ import ts from 'typescript'
 export interface Model {
   metadata: Metadata
   pages: Page[]
+  symbols: { [symbolId: string]: any }
 }
 
 export interface Metadata {
