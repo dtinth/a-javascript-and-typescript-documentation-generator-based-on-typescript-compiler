@@ -176,22 +176,26 @@ export async function generateDocs(
   const symbolSerializer: DocEntrySerializer<ts.Symbol> = {
     serialize(entry, delegate) {
       const symbol = entry.target
-      const classification = classifier.classifySymbol(symbol)
-      const firstDeclaration = symbol.declarations?.[0]
-      const type = firstDeclaration
-        ? checker.getTypeOfSymbolAtLocation(symbol, firstDeclaration)
-        : null
       return {
-        id: delegate.getEntryId(entry),
-        name: entry.name,
-        info: {
-          type: 'symbol',
-          kind: classification.kind,
-          symbolId: delegate.getSymbolId(symbol),
-          typeInfo: type ? serializeType(type, delegate) : undefined,
-        },
+        type: 'symbol',
+        ...serializeSymbol(symbol, delegate),
       }
     },
+  }
+
+  function serializeSymbol(symbol: ts.Symbol, delegate: SerializeDelegate) {
+    const classification = classifier.classifySymbol(symbol)
+    const firstDeclaration = symbol.declarations?.[0]
+    const type = firstDeclaration
+      ? checker.getTypeOfSymbolAtLocation(symbol, firstDeclaration)
+      : null
+    return {
+      kind: classification.kind,
+      symbolId: delegate.getSymbolId(symbol),
+      typeInfo: type ? serializeType(type, delegate) : undefined,
+      documentationComment: symbol.getDocumentationComment(checker),
+      jsDocTags: symbol.getJsDocTags(),
+    }
   }
 
   const globalsSerializer: DocEntrySerializer<DocPage | null> = {
@@ -201,8 +205,18 @@ export async function generateDocs(
   }
 
   const signatureSerializer: DocEntrySerializer<ts.Signature> = {
-    serialize(_entry) {
-      // return getSymbolName(symbol)
+    serialize(entry, delegate) {
+      const signature = entry.target
+      return {
+        type: 'signature',
+        declaration: serializeDeclaration(signature.getDeclaration()),
+        documentationComment: signature.getDocumentationComment(checker),
+        jsDocTags: signature.getJsDocTags(),
+        parameters: signature.getParameters().map((parameter) => {
+          return serializeSymbol(parameter, delegate)
+        }),
+        returnType: serializeType(signature.getReturnType(), delegate),
+      }
     },
   }
 
@@ -379,7 +393,7 @@ export async function generateDocs(
   }
 
   interface SerializeDelegate {
-    getPageId(page: DocPage): number
+    getPageId(page: DocPage): string
     getEntryId(entry: DocEntry<any>): string
     getSymbolId(symbol: ts.Symbol): string
   }
@@ -393,7 +407,7 @@ export async function generateDocs(
       if (id) {
         return id
       }
-      id = `${symbol.getName()}$${this.nextId++}`
+      id = `${getSymbolName(symbol)}$${this.nextId++}`
       this.symbolToSymbolIdMap.set(symbol, id)
       this.symbolIdToSymbolMap.set(id, symbol)
       return id
@@ -421,20 +435,20 @@ export async function generateDocs(
           ]
         }),
       )
-
-      function serializeDeclaration(declaration: ts.Declaration) {
-        const startPosition = declaration.getStart()
-        const sourceFile = declaration.getSourceFile()
-        const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
-        const declaredAt: DeclarationInfo = {
-          line: start.line,
-          character: start.character,
-          position: startPosition,
-          sourceFile: sourceFileRegistry.getSourceFileId(sourceFile),
-        }
-        return declaredAt
-      }
     }
+  }
+
+  function serializeDeclaration(declaration: ts.Declaration) {
+    const startPosition = declaration.getStart()
+    const sourceFile = declaration.getSourceFile()
+    const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
+    const declaredAt: DeclarationInfo = {
+      line: start.line,
+      character: start.character,
+      position: startPosition,
+      sourceFile: sourceFileRegistry.getSourceFileId(sourceFile),
+    }
+    return declaredAt
   }
 
   function serialize(
@@ -539,7 +553,11 @@ export async function generateDocs(
 
       function serializeEntry(entry: DocEntry<any>) {
         try {
-          return entry.section.serializer.serialize(entry, delegate)
+          return {
+            id: delegate.getEntryId(entry),
+            name: entry.name,
+            info: entry.section.serializer.serialize(entry, delegate),
+          }
         } catch (error) {
           error.message = `Failed to format ${entry.inspect()}: ${
             error.message
@@ -718,12 +736,21 @@ export async function generateDocs(
         if (!instanceType) {
           return
         }
-        if (instanceType.isClassOrInterface()) {
-          const properties = instanceType.getProperties()
-          for (const property of properties) {
+        if (!symbol.valueDeclaration) {
+          for (const signature of instanceType.getConstructSignatures()) {
+            delegate.addEntry(
+              page.instanceConstructors,
+              '(constructor)',
+              signature,
+            )
+          }
+          for (const signature of instanceType.getCallSignatures()) {
+            delegate.addEntry(page.instanceCallSignatures, '(call)', signature)
+          }
+          for (const property of instanceType.getProperties()) {
             delegate.addSymbolEntry(page.instanceProperties, property, property)
           }
-        } else if (!symbol.valueDeclaration) {
+        } else {
           const members: ts.Symbol[] = [
             ...(symbol.members?.values() || ([] as any)),
           ]
@@ -810,17 +837,6 @@ export async function generateDocs(
   //         inherited,
   //       }
   //     }),
-  //   }
-  // }
-
-  // function getSignatureInfo(signature: ts.Signature): SignatureInfo {
-  //   return {
-  //     declaration: getDeclarationInfo(signature.getDeclaration()),
-  //     documentationComment: signature.getDocumentationComment(typeChecker),
-  //     jsDocTags: signature.getJsDocTags(),
-  //     parameters: signature.getParameters().map(visitNamedSymbol),
-  //     returnType: getBriefTypeInfo(signature.getReturnType()),
-  //     // TODO: getTypeParameters
   //   }
   // }
 
