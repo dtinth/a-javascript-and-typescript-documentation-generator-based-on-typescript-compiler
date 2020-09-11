@@ -724,6 +724,12 @@ export async function generateDocs(
           const memberClassification = classifySymbol(member)
           memberClassification.addToPage?.(page, member, delegate)
         }
+        for (const signature of constructSignatures) {
+          delegate.addEntry(page.constructors, '(constructor)', signature)
+        }
+        for (const signature of callSignatures) {
+          delegate.addEntry(page.callSignatures, '(call)', signature)
+        }
         populateInterfacePage(page, delegate)
       }
 
@@ -736,7 +742,7 @@ export async function generateDocs(
         if (!instanceType) {
           return
         }
-        if (!symbol.valueDeclaration) {
+        if (!symbol.valueDeclaration || instanceType.isClassOrInterface()) {
           for (const signature of instanceType.getConstructSignatures()) {
             delegate.addEntry(
               page.instanceConstructors,
