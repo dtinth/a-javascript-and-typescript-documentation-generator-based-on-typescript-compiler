@@ -167,12 +167,13 @@ export async function generateDocs(
   }
 
   interface DocEntrySerializer<T> {
-    serialize(entry: DocEntry<T>): any
+    serialize(entry: DocEntry<T>, delegate: SerializeDelegate): any
   }
 
   const symbolSerializer: DocEntrySerializer<ts.Symbol> = {
-    serialize(entry) {
+    serialize(entry, delegate) {
       return {
+        id: delegate.getEntryId(entry),
         name: entry.name,
         info: {
           type: 'symbol',
@@ -193,10 +194,51 @@ export async function generateDocs(
     },
   }
 
+  class EntryIdRegistry {
+    private readonly entryToIdMap = new Map<DocEntry<any>, string>()
+    private readonly entryIdToEntryMap = new Map<string, DocEntry<any>>()
+    add(entry: DocEntry<any>) {
+      return this.getOrCreateEntryId(entry)
+    }
+    getEntryId(entry: DocEntry<any>) {
+      let id = this.entryToIdMap.get(entry)
+      if (!id) {
+        throw new Error(`Entry not registered: ${entry.inspect()}`)
+      }
+      return id
+    }
+    private getOrCreateEntryId(entry: DocEntry<any>): string {
+      let id = this.entryToIdMap.get(entry)
+      if (id) {
+        return id
+      }
+      const parentEntry = entry.section.page.parent
+      let prefix = ''
+      if (parentEntry) {
+        prefix = this.getOrCreateEntryId(parentEntry) + '.'
+      }
+      const baseId = prefix + entry.name
+      for (let i = 0; ; i++) {
+        const proposedId = baseId + (i ? `$${i}` : '')
+        if (!this.entryIdToEntryMap.has(proposedId)) {
+          id = proposedId
+          break
+        }
+      }
+      this.entryToIdMap.set(entry, id)
+      this.entryIdToEntryMap.set(id, entry)
+      return id
+    }
+  }
+
   class DocBuilder {
     readonly root = new DocPage(DocPageKind.Root, null, '(root)')
+    readonly entryIdRegistry = new EntryIdRegistry()
+
     addEntry<T>(section: DocSection<T>, name: string, target: T) {
-      return section.addEntry(name, target)
+      const entry = section.addEntry(name, target)
+      this.entryIdRegistry.add(entry)
+      return entry
     }
   }
 
@@ -217,7 +259,7 @@ export async function generateDocs(
   function main() {
     const sourceFilesSet = new Set(entrySourceFiles)
     const builder = new DocBuilder()
-    const root = builder.root
+    const { root, entryIdRegistry } = builder
     const elaborationQueue = new Set<DocEntry<ts.Symbol>>()
     const symbolPageMap = new Map<ts.Symbol, DocPage>()
     const symbolEntryMap = new Map<ts.Symbol, DocEntry<any>>()
@@ -291,7 +333,7 @@ export async function generateDocs(
       processEntry(entry)
     }
 
-    return { root, symbolPageMap }
+    return { root, symbolPageMap, entryIdRegistry }
 
     function isDeclaredInsideEntryFile(symbol: ts.Symbol) {
       return (
@@ -324,11 +366,21 @@ export async function generateDocs(
     }
   }
 
+  interface SerializeDelegate {
+    getEntryId(entry: DocEntry<any>): string
+  }
+
   function serialize(
     root: DocPage,
     symbolPageMap: Map<ts.Symbol, DocPage>,
+    entryIdRegistry: EntryIdRegistry,
   ): Model {
     const pageList = new PageList(root)
+    const delegate: SerializeDelegate = {
+      getEntryId(entry) {
+        return entryIdRegistry.getEntryId(entry)
+      },
+    }
     const serializedPages = pageList.pages.map(serializePage)
 
     return {
@@ -367,7 +419,7 @@ export async function generateDocs(
 
     function serializeEntry(entry: DocEntry<any>) {
       try {
-        return entry.section.serializer.serialize(entry)
+        return entry.section.serializer.serialize(entry, delegate)
       } catch (error) {
         error.message = `Failed to format ${entry.inspect()}: ${error.message}`
         throw error
@@ -695,9 +747,9 @@ export async function generateDocs(
   }
 
   {
-    const { root, symbolPageMap } = main()
+    const { root, symbolPageMap, entryIdRegistry } = main()
     return {
-      model: serialize(root, symbolPageMap),
+      model: serialize(root, symbolPageMap, entryIdRegistry),
       program,
       checker: checker,
     }
