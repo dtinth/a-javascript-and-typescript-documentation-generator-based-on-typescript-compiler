@@ -439,6 +439,9 @@ export async function generateDocs(
   }
 
   function serializeDeclaration(declaration: ts.Declaration) {
+    if (!declaration) {
+      return undefined
+    }
     const startPosition = declaration.getStart()
     const sourceFile = declaration.getSourceFile()
     const start = sourceFile.getLineAndCharacterOfPosition(startPosition)
