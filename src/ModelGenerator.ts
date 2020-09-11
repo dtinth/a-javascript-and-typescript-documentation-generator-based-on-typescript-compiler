@@ -152,22 +152,59 @@ export async function generateDocs(
     }
   }
 
+  class DocBuilder {
+    readonly root = new DocPage(DocPageKind.Root, null, '(root)')
+    addEntry<T>(section: DocSection<T>, name: string, target: T) {
+      return section.addEntry(name, target)
+    }
+  }
+
+  interface SymbolProcessingDelegate {
+    addEntry<T>(section: DocSection<T>, name: string, target: T): DocEntry<T>
+    addSymbolEntry(
+      section: DocSection<ts.Symbol>,
+      originSymbol: ts.Symbol,
+      targetSymbol: ts.Symbol,
+    ): DocEntry<ts.Symbol>
+    addSubpage(
+      section: DocSection<ts.Symbol>,
+      originSymbol: ts.Symbol,
+      targetSymbol: ts.Symbol,
+    ): DocEntry<ts.Symbol>
+  }
+
   function main() {
     const sourceFilesSet = new Set(entrySourceFiles)
-    const root = new DocPage(DocPageKind.Root, null, '(root)')
+    const builder = new DocBuilder()
+    const root = builder.root
     const elaborationQueue = new Set<DocEntry<ts.Symbol>>()
     const symbolPageMap = new Map<ts.Symbol, DocPage>()
     const symbolEntryMap = new Map<ts.Symbol, DocEntry<any>>()
 
-    const enqueue: EnqueueFn = (entry) => {
-      elaborationQueue.add(entry)
-      return entry
-    }
-    const associate: AssociateFn = (entry, symbol) => {
-      if (!symbolEntryMap.has(symbol)) {
-        symbolEntryMap.set(symbol, entry)
-      }
-      return entry
+    const delegate: SymbolProcessingDelegate = {
+      addEntry: (section, name, target) => {
+        return builder.addEntry(section, name, target)
+      },
+      addSubpage: (section, originSymbol, targetSymbol) => {
+        const entry = delegate.addSymbolEntry(
+          section,
+          originSymbol,
+          targetSymbol,
+        )
+        elaborationQueue.add(entry)
+        return entry
+      },
+      addSymbolEntry: (section, originSymbol, targetSymbol) => {
+        const entry = builder.addEntry(
+          section,
+          getSymbolName(originSymbol),
+          targetSymbol,
+        )
+        if (!symbolEntryMap.has(originSymbol)) {
+          symbolEntryMap.set(originSymbol, entry)
+        }
+        return entry
+      },
     }
 
     // Enqueue modules that are source files.
@@ -175,23 +212,13 @@ export async function generateDocs(
       if (!sourceFile) continue
       const moduleSymbol = checker.getSymbolAtLocation(sourceFile)
       if (!moduleSymbol) continue
-      enqueue(
-        associate(
-          root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol),
-          moduleSymbol,
-        ),
-      )
+      delegate.addSubpage(root.modules, moduleSymbol, moduleSymbol)
     }
 
     // Enqueue ambient modules declared inside the entry source files
     for (const moduleSymbol of checker.getAmbientModules()) {
       if (isDeclaredInsideEntryFile(moduleSymbol)) {
-        enqueue(
-          associate(
-            root.modules.addEntry(getSymbolName(moduleSymbol), moduleSymbol),
-            moduleSymbol,
-          ),
-        )
+        delegate.addSubpage(root.modules, moduleSymbol, moduleSymbol)
       }
     }
 
@@ -207,7 +234,7 @@ export async function generateDocs(
       if (isDeclaredInsideEntryFile(globalSymbol)) {
         const classification = classifier.classifySymbol(globalSymbol)
         if (!globalNamespacePage) {
-          const entry = root.globals.addEntry('(globals)', null)
+          const entry = builder.addEntry(root.globals, '(globals)', null)
           globalNamespacePage = new DocPage(
             DocPageKind.Namespace,
             entry,
@@ -215,12 +242,7 @@ export async function generateDocs(
           )
           entry.target = globalNamespacePage
         }
-        classification.addToPage?.(
-          globalNamespacePage,
-          globalSymbol,
-          enqueue,
-          associate,
-        )
+        classification.addToPage?.(globalNamespacePage, globalSymbol, delegate)
       }
     }
 
@@ -256,7 +278,7 @@ export async function generateDocs(
       if (!page) {
         page = new DocPage(kind, entry, name)
         symbolPageMap.set(symbol, page)
-        classification.populatePage?.(page, enqueue, associate)
+        classification.populatePage?.(page, delegate)
       }
     }
   }
@@ -325,18 +347,10 @@ export async function generateDocs(
     addToPage?: (
       page: DocPage,
       sourceSymbol: ts.Symbol,
-      enqueuePage: EnqueueFn,
-      associateSymbolWithEntry: AssociateFn,
+      delegate: SymbolProcessingDelegate,
     ) => void
-    populatePage?: (
-      page: DocPage,
-      enqueuePage: EnqueueFn,
-      associateSymbolWithEntry: AssociateFn,
-    ) => void
+    populatePage?: (page: DocPage, delegate: SymbolProcessingDelegate) => void
   }
-
-  type EnqueueFn = (entry: DocEntry<ts.Symbol>) => DocEntry<ts.Symbol>
-  type AssociateFn = <T>(entry: DocEntry<T>, symbol: ts.Symbol) => DocEntry<T>
 
   function createClassifier() {
     const typeEntryMap = new Map<ts.Type, DocEntry<ts.Symbol>>()
@@ -370,13 +384,8 @@ export async function generateDocs(
         ) {
           return {
             description: 'Interface',
-            addToPage: (page, originSymbol, enqueue, associate) => {
-              enqueue(
-                associate(
-                  page.types.addEntry(getSymbolName(originSymbol), symbol),
-                  originSymbol,
-                ),
-              )
+            addToPage: (page, originSymbol, delegate) => {
+              delegate.addSubpage(page.types, originSymbol, symbol)
             },
             newPageOptions: createPageOptions(DocPageKind.Interface),
             populatePage: populateInterfacePage,
@@ -384,11 +393,8 @@ export async function generateDocs(
         } else {
           return {
             description: 'Type Alias',
-            addToPage: (page, originSymbol, _enqueue, associate) => {
-              associate(
-                page.types.addEntry(getSymbolName(originSymbol), symbol),
-                originSymbol,
-              )
+            addToPage: (page, originSymbol, delegate) => {
+              delegate.addSymbolEntry(page.types, originSymbol, symbol)
             },
           }
         }
@@ -404,14 +410,8 @@ export async function generateDocs(
         const classification = classifySymbol(targetSymbol)
         return {
           description: classification.description,
-          addToPage: (page, originSymbol, _enqueue, associate) => {
-            associate(
-              page.properties.addEntry(
-                getSymbolName(originSymbol),
-                targetSymbol,
-              ),
-              originSymbol,
-            )
+          addToPage: (page, originSymbol, delegate) => {
+            delegate.addSymbolEntry(page.properties, originSymbol, targetSymbol)
           },
           // Do not populate new pages
         }
@@ -447,16 +447,13 @@ export async function generateDocs(
               : DocPageKind.Namespace,
           ),
           populatePage: populateValuePage,
-          addToPage: (page, originSymbol, enqueue, associate) => {
+          addToPage: (page, originSymbol, delegate) => {
             const category = constructable
               ? page.classes
               : callable
               ? page.properties
               : page.namespaces
-            const entry = associate(
-              category.addEntry(getSymbolName(originSymbol), symbol),
-              originSymbol,
-            )
+            const entry = delegate.addSubpage(category, originSymbol, symbol)
             typeEntryMap.set(type, entry)
 
             const instanceType =
@@ -473,28 +470,20 @@ export async function generateDocs(
             if (prototypeType && prototypeType !== type) {
               typeEntryMap.set(prototypeType, entry)
             }
-
-            enqueue(entry)
           },
         }
       } else if (typeIsObject && callSignatures.length > 0) {
         return {
           description: 'Function',
-          addToPage: (page, originSymbol, _enqueue, associate) => {
-            associate(
-              page.properties.addEntry(getSymbolName(originSymbol), symbol),
-              originSymbol,
-            )
+          addToPage: (page, originSymbol, delegate) => {
+            delegate.addSymbolEntry(page.properties, originSymbol, symbol)
           },
         }
       } else {
         return {
           description: 'Member',
-          addToPage: (page, originSymbol, _enqueue, associate) => {
-            associate(
-              page.properties.addEntry(getSymbolName(originSymbol), symbol),
-              originSymbol,
-            )
+          addToPage: (page, originSymbol, delegate) => {
+            delegate.addSymbolEntry(page.properties, originSymbol, symbol)
           },
         }
       }
@@ -505,21 +494,19 @@ export async function generateDocs(
 
       function populateValuePage(
         page: DocPage,
-        enqueue: EnqueueFn,
-        associate: AssociateFn,
+        delegate: SymbolProcessingDelegate,
       ) {
         const members = new Set([...properties, ...exportedSymbols])
         for (const member of members) {
           const memberClassification = classifySymbol(member)
-          memberClassification.addToPage?.(page, member, enqueue, associate)
+          memberClassification.addToPage?.(page, member, delegate)
         }
-        populateInterfacePage(page, enqueue, associate)
+        populateInterfacePage(page, delegate)
       }
 
       function populateInterfacePage(
         page: DocPage,
-        _enqueue: EnqueueFn,
-        associate: AssociateFn,
+        delegate: SymbolProcessingDelegate,
       ) {
         const instanceType =
           declaration.parent && checker.getTypeAtLocation(declaration)
@@ -529,23 +516,14 @@ export async function generateDocs(
         if (instanceType.isClassOrInterface()) {
           const properties = instanceType.getProperties()
           for (const property of properties) {
-            associate(
-              page.instanceProperties.addEntry(
-                getSymbolName(property),
-                property,
-              ),
-              property,
-            )
+            delegate.addSymbolEntry(page.instanceProperties, property, property)
           }
         } else if (!symbol.valueDeclaration) {
           const members: ts.Symbol[] = [
             ...(symbol.members?.values() || ([] as any)),
           ]
           for (const member of members) {
-            associate(
-              page.instanceProperties.addEntry(getSymbolName(member), member),
-              member,
-            )
+            delegate.addSymbolEntry(page.instanceProperties, member, member)
           }
         }
       }
