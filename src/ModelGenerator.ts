@@ -647,19 +647,23 @@ export async function generateDocs(
         }
       }
 
-      const typeIsObject = type.flags & ts.TypeFlags.Object
       // console.log(getSymbolName(symbol), checker.typeToString(type), getType)
       const properties = type.getProperties()
       const exportedSymbols = checker.getExportsOfModule(symbol)
       const callSignatures = type.getCallSignatures()
       const constructSignatures = type.getConstructSignatures()
-
+      const isObjectType = (type: ts.Type): type is ts.ObjectType => {
+        return (type.flags & ts.TypeFlags.Object) !== 0
+      }
       if (
-        typeIsObject &&
+        isObjectType(type) &&
         constructSignatures.length +
           exportedSymbols.length +
           properties.length >
-          0
+          0 &&
+        (constructSignatures.length + exportedSymbols.length > 0 ||
+          type.objectFlags &
+            (ts.ObjectFlags.ClassOrInterface | ts.ObjectFlags.Anonymous))
       ) {
         const constructable = constructSignatures.length > 0
         const callable = callSignatures.length > 0
@@ -698,7 +702,7 @@ export async function generateDocs(
             }
           },
         }
-      } else if (typeIsObject && callSignatures.length > 0) {
+      } else if (isObjectType(type) && callSignatures.length > 0) {
         return {
           kind: 'function',
           addToPage: (page, originSymbol, delegate) => {
